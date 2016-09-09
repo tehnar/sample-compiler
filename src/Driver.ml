@@ -51,3 +51,9 @@ let _ =
   let [r] = run [3; 4] p in
   Printf.printf "%d\n" r
                 
+let run input p =
+  srun input (compile_stmt p)
+
+let _ =
+  let [r] = run [3; 4] p in
+  Printf.printf "%d\n" r
