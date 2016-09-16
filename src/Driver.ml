@@ -18,9 +18,9 @@ let p =
       )
     )
 
-let _ =
-  let [r] = run [3; 4] p in
-  Printf.printf "%d\n" r
+(* let _ = *)
+(*   let [r] = run [3; 4] p in *)
+(*   Printf.printf "%d\n" r *)
 
 let ( !! )       = (!)
 let ( !  ) x     = Var x
@@ -45,15 +45,19 @@ let p =
   read "x" |>
   read "y" |>
   ("z" := !"x" * !"x") |>
-  write (!"z" + !"y")  
+  write (!"z" + !"y")
 
+(*
 let _ =
   let [r] = run [3; 4] p in
   Printf.printf "%d\n" r
-                
+
 let run input p =
   srun input (compile_stmt p)
 
 let _ =
   let [r] = run [3; 4] p in
   Printf.printf "%d\n" r
+*)
+
+let _ = build p "p"
