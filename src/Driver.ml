@@ -1,32 +1,21 @@
-open Expr
-
-(*
-read (x);
-read (y);
-z := x * x;
-write (z+y)
-*)
-let p =
-  Seq (
-      Read "x",
-      Seq (
-          Read "y",
-          Seq (
-              Assign ("z", Mul (Var "x", Var "x")),
-              Write (Add (Var "z", Var "y"))
-          )
-      )
-    )
-
-(* let _ = *)
-(*   let [r] = run [3; 4] p in *)
-(*   Printf.printf "%d\n" r *)
+open Data
+open X86Compiler 
+open StackMachineEmulator
 
 let ( !! )       = (!)
 let ( !  ) x     = Var x
-let ( $  ) n     = Const n
+let c n     = Const n
 let ( +  ) e1 e2 = Add (e1, e2)
+let ( -  ) e1 e2 = Add (e1, e2)
 let ( *  ) e1 e2 = Mul (e1, e2)
+let ( /  ) e1 e2 = Div (e1, e2)
+let ( %  ) e1 e2 = Mod (e1, e2)
+let ( <  ) e1 e2 = Le  (e1, e2)
+let ( <= ) e1 e2 = Leq (e1, e2)
+let ( >  ) e1 e2 = Ge  (e1, e2)
+let ( >= ) e1 e2 = Geq (e1, e2)
+let ( && ) e1 e2 = And (e1, e2)
+let ( || ) e1 e2 = Or  (e1, e2)
 
 let skip     = Skip
 let (:=) x e = Assign (x, e)
@@ -34,30 +23,38 @@ let read x   = Read x
 let write x  = Write x
 let (|>) l r = Seq (l, r)
 
-(*
-read (x);
-read (y);
-z := x * x;
-write (z+y)
-*)
-
-let p =
-  read "x" |>
+let p = 
+  read "x" |> 
   read "y" |>
-  ("z" := !"x" * !"x") |>
-  write (!"z" + !"y")
-
+  ("z" := c 3 + ((c (-123) / c 7) - (!"x" * !"x"))) |>
+  write (!"z" + !"y") |>
+  ("var" := (((((!"x" + !"y") + !"z") + c 123) + c 234) + c 456) % c 239) |>
+  write !"var" |>
+  write (!"var" < c 97) |>
+  write (!"var" < c 98) |>
+  write (!"var" < c 99) |>
+  write (!"var" <= c 97) |>
+  write (((((((!"var" <= c 98) * c 100000) + c 123) + c 456) + c 789) + c 1023) > !"x")  |>
+  write (!"var" <= c 99) |>
+  ("test1" := c 1) |>
+  write ((!"test1" >= c 2) || (c 2 * c 2) > c 3) |>
+  write (c 2 && c 1) |>
+  write (c 2 && c 0)
 (*
 let _ =
-  let [r] = run [3; 4] p in
-  Printf.printf "%d\n" r
+  let vals = run [3; 4] p in
+  List.iter (fun x -> Printf.printf "%d\n" x) vals
 
-let run input p =
-  srun input (compile_stmt p)
 
-let _ =
-  let [r] = run [3; 4] p in
-  Printf.printf "%d\n" r
-*)
 
 let _ = build p "p"
+*)
+
+let main =
+  try
+    let filename = Sys.argv.(1) in
+    match Parser.parse filename with
+    | `Ok stmt -> ignore @@ build stmt (Filename.chop_suffix filename ".expr")
+    | `Fail er -> Printf.eprintf "%s" er
+  with Invalid_argument _ ->
+    Printf.printf "Usage: rc.byte <name.expr>\n"

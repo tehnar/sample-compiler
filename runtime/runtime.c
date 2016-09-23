@@ -2,7 +2,7 @@
 
 extern int read () {
   int d;
-  printf ("> ");
+//  printf ("> ");
   scanf ("%d", &d);
   return d;
 }
