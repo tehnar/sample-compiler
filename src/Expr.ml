@@ -88,17 +88,20 @@ let rec compile_stmt stmt =
   | Write   e     -> compile_expr e @ [S_WRITE]
   | Seq    (l, r) -> compile_stmt l @ compile_stmt r
 
-let x86regs = [|"%eax"; "%ebx"; "%ecx"; "%edx"; "%esi"; "%edi"|]
+type opnd = R of int | S of int | M of string | L of int
+
+let x86regs = [|"%ebx"; "%ecx"; "%esi"; "%edi"; "%eax"; "%edx"|]
 let num_of_regs = Array.length x86regs
 let word_size = 4
 
-type opnd = R of int | S of int | M of string | L of int
+let eax = R 4
 
 let allocate env stack =
   match stack with
   | []                              -> R 0
   | (S n)::_                        -> env#allocate (n+1); S (n+1)
-  | (R n)::_ when n < num_of_regs-1 -> R (n+1)
+      (* It doesn't allocate %eax and %edx. *)
+  | (R n)::_ when n < num_of_regs-3 -> R (n+1)
   | _                               -> S 0
 
 type x86instr =
@@ -144,7 +147,7 @@ let x86compile : x86env -> instr list -> x86instr list = fun env code ->
     | i::code' ->
        let (stack', x86code) =
          match i with
-         | S_READ   -> ([R 0], [X86Call "read"])
+         | S_READ   -> ([eax], [X86Call "read"])
          | S_WRITE  -> ([], [X86Push (R 0); X86Call "write"; X86Pop (R 0)])
          | S_PUSH n ->
            let s = allocate env stack in
@@ -159,10 +162,21 @@ let x86compile : x86env -> instr list -> x86instr list = fun env code ->
            (stack', [X86Mov (s, M x)])
          | S_ADD   ->
            let x::y::stack' = stack in
-           (y::stack', [X86Add (x, y)])
+           (match x, y with
+            | S _, S _ ->
+              (y::stack', [X86Mov (x, eax);
+                           X86Add (eax, y)])
+            | _ ->
+              (y::stack', [X86Add (x, y)]))
          | S_MUL   ->
            let x::y::stack' = stack in
-           (y::stack', [X86Mul (x, y)])
+            (match x, y with
+            | S _, S _ ->
+              (y::stack', [X86Mov (y, eax);
+                           X86Mul (x, eax);
+                           X86Mov (eax, y)])
+            | _ ->
+              (y::stack', [X86Mul (x, y)]))
        in
        x86code @ x86compile' stack' code'
   in
@@ -185,13 +199,13 @@ let genasm stmt =
     then (fun () -> ()), (fun () -> ())
     else
       (fun () ->
-         !"\tpushq\t%ebp";
+         !"\tpushl\t%ebp";
          !"\tmovl\t%esp,\t%ebp";
          !(Printf.sprintf "\tsubl\t$%d,\t%%esp" (env#allocated * word_size))
       ),
       (fun () ->
          !"\tmovl\t%ebp,\t%esp";
-         !"\tpopq\t%ebp"
+         !"\tpopl\t%ebp"
       )
   in
   !"main:";
