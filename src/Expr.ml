@@ -159,7 +159,7 @@ let x86compile : x86env -> instr list -> x86instr list = fun env code ->
            (stack', [X86Mov (s, M x)])
          | S_ADD   ->
            let x::y::stack' = stack in
-           (stack', [X86Add (x, y)])
+           (y::stack', [X86Add (x, y)])
          | S_MUL   ->
            let x::y::stack' = stack in
            (y::stack', [X86Mul (x, y)])
@@ -186,7 +186,7 @@ let genasm stmt =
     else
       (fun () ->
          !"\tpushq\t%ebp";
-         !"\tmovl\t%esp\t%ebp";
+         !"\tmovl\t%esp,\t%ebp";
          !(Printf.sprintf "\tsubl\t$%d,\t%%esp" (env#allocated * word_size))
       ),
       (fun () ->

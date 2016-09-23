@@ -1,5 +1,7 @@
 open Expr
+open Parser
 
+(*
 (*
 read (x);
 read (y);
@@ -59,5 +61,13 @@ let _ =
   let [r] = run [3; 4] p in
   Printf.printf "%d\n" r
 *)
+*)
 
-let _ = build p "p"
+let main =
+  try
+    let filename = Sys.argv.(1) in
+    match Parser.parse filename with
+    | `Ok stmt -> ignore @@ Expr.build stmt (Filename.chop_suffix filename ".expr")
+    | `Fail er -> Printf.eprintf "%s" er
+  with Invalid_argument _ ->
+    Printf.printf "Usage: rc.byte <name.expr>"
