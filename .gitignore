@@ -1,0 +1,8 @@
+*.s
+*.annot
+regression/*.log
+!regression/orig/*.log
+*.swp
+*.swo
+*.o
+regression/test???
