@@ -2,6 +2,7 @@ open Data
 open X86Compiler 
 open StackMachineEmulator
 
+(*
 let ( !! )       = (!)
 let ( !  ) x     = Var x
 let c n     = Const n
@@ -49,7 +50,7 @@ let _ =
 
 let _ = build p "p"
 *)
-
+*)
 let main =
   try
     let filename = Sys.argv.(1) in

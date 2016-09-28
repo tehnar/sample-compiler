@@ -4,17 +4,9 @@ let rec compile_expr expr =
   match expr with
   | Var    x     -> [S_LD   x]
   | Const  n     -> [S_PUSH n]
-  | Add   (l, r) -> compile_expr l @ compile_expr r @ [S_ADD]
-  | Sub   (l, r) -> compile_expr l @ compile_expr r @ [S_SUB]
-  | Mul   (l, r) -> compile_expr l @ compile_expr r @ [S_MUL]
-  | Div   (l, r) -> compile_expr l @ compile_expr r @ [S_DIV]
-  | Mod   (l, r) -> compile_expr l @ compile_expr r @ [S_MOD]
-  | Le    (l, r) -> compile_expr l @ compile_expr r @ [S_LE]
-  | Leq   (l, r) -> compile_expr l @ compile_expr r @ [S_LEQ]
-  | Ge    (l, r) -> compile_expr l @ compile_expr r @ [S_GE]
-  | Geq   (l, r) -> compile_expr l @ compile_expr r @ [S_GEQ]
-  | And   (l, r) -> compile_expr l @ compile_expr r @ [S_AND]
-  | Or    (l, r) -> compile_expr l @ compile_expr r @ [S_OR]
+  | BinaryArithmExpr  (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_ARITHM_OP  op]
+  | BinaryCompareExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_COMPARE_OP op]
+  | BinaryLogicalExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_LOGICAL_OP op]
 
 let rec compile_statement stmt =
   match stmt with

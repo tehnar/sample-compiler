@@ -6,35 +6,35 @@ ostap (
   expr: op5; 
 
   op5:
-    l:op4 suf:("||" r:op4)* {List.fold_left (fun l (op, r) -> Or (l, r)) l suf};
+    l:op4 suf:("||" r:op4)* {List.fold_left (fun l (op, r) -> BinaryLogicalExpr (Or, l, r)) l suf};
 
   op4:
-    l:op3 suf:("&&" r:op3)* {List.fold_left (fun l (op, r) -> And (l, r)) l suf};
+    l:op3 suf:("&&" r:op3)* {List.fold_left (fun l (op, r) -> BinaryLogicalExpr (And, l, r)) l suf};
 
   op3:
     l:op2 suf:(("<="|"<"|">="|">") r:op2)* {List.fold_left (fun l (op, r) -> 
       match op with 
-      | ("<", _)  -> Le  (l, r)
-      | ("<=", _) -> Leq (l, r)
-      | (">", _)  -> Ge  (l, r)
-      | (">=", _) -> Geq (l, r)
+      | ("<", _)  -> BinaryCompareExpr (Le,  l, r)
+      | ("<=", _) -> BinaryCompareExpr (Leq, l, r)
+      | (">", _)  -> BinaryCompareExpr (Ge,  l, r)
+      | (">=", _) -> BinaryCompareExpr (Geq, l, r)
       | _        -> assert false
     ) l suf};
 
   op2:
     l:op1 suf:(("+"|"-") r:op1)* {List.fold_left (fun l (op, r) -> 
       match op with 
-      | ("+", _) -> Add (l, r)
-      | ("-", _) -> Sub (l, r)
+      | ("+", _) -> BinaryArithmExpr (Add, l, r)
+      | ("-", _) -> BinaryArithmExpr (Sub, l, r)
       | _        -> assert false
     ) l suf};
 
   op1:
     l:primary suf:(("*"|"/"|"%") r:primary)* {List.fold_left (fun l (op, r) ->
      match op with
-     | ("*", _) -> Mul (l, r)
-     | ("/", _) -> Div (l, r)
-     | ("%", _) -> Mod (l, r)
+     | ("*", _) -> BinaryArithmExpr (Mul, l, r)
+     | ("/", _) -> BinaryArithmExpr (Div, l, r)
+     | ("%", _) -> BinaryArithmExpr (Mod, l, r)
      | _        -> assert false
    ) l suf}
   | primary;

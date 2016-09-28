@@ -1,17 +1,13 @@
+type binary_arithm_op  = Add | Sub | Mul | Div | Mod 
+type binary_compare_op = Le  | Leq | Ge  | Geq
+type binary_logical_op = And | Or
+
 type expr =
   | Const of int
   | Var   of string
-  | Add   of expr * expr
-  | Mul   of expr * expr
-  | Sub   of expr * expr
-  | Mod   of expr * expr
-  | Div   of expr * expr
-  | Le    of expr * expr
-  | Leq   of expr * expr
-  | Ge    of expr * expr
-  | Geq   of expr * expr
-  | And   of expr * expr
-  | Or    of expr * expr
+  | BinaryArithmExpr  of binary_arithm_op  * expr * expr
+  | BinaryCompareExpr of binary_compare_op * expr * expr
+  | BinaryLogicalExpr of binary_logical_op * expr * expr
 
 type statement =
   | Skip
@@ -24,17 +20,9 @@ type statement =
 type instr =
   | S_READ
   | S_WRITE
-  | S_PUSH  of int
-  | S_LD    of string
-  | S_ST    of string
-  | S_ADD
-  | S_MUL
-  | S_SUB
-  | S_DIV
-  | S_MOD
-  | S_LE
-  | S_LEQ
-  | S_GE
-  | S_GEQ
-  | S_AND
-  | S_OR
+  | S_PUSH               of int
+  | S_LD                 of string
+  | S_ST                 of string
+  | S_BINARY_ARITHM_OP   of binary_arithm_op
+  | S_BINARY_COMPARE_OP  of binary_compare_op
+  | S_BINARY_LOGICAL_OP  of binary_logical_op

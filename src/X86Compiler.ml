@@ -86,7 +86,27 @@ let x86print : x86instr -> string = function
   | X86Call  p          -> Printf.sprintf "\tcall\t%s" p
   | X86Cld       -> Printf.sprintf "\tcdq"
 
-let x86_compile_binary_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
+
+let binary_arithm_op_to_asm = fun op -> 
+  match op with
+  | Add -> (fun (l, r) -> X86Add (l, r))
+  | Sub -> (fun (l, r) -> X86Sub (l, r))
+  | Mul -> (fun (l, r) -> X86Mul (l, r))
+  | _   -> assert false
+
+let binary_compare_op_to_asm = fun op -> 
+  match op with
+  | Le  -> (fun l -> X86Setl  l)
+  | Leq -> (fun l -> X86Setle l)
+  | Ge  -> (fun l -> X86Setg  l)
+  | Geq -> (fun l -> X86Setge l)
+
+let binary_logical_op_to_asm = fun op -> 
+  match op with
+  | Or  -> (fun (l, r) -> X86Or  (l, r))
+  | And -> (fun (l, r) -> X86And (l, r))
+
+let x86_compile_binary_arithm_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
     match stack with
     | [] | _::[]   -> assert false
@@ -95,7 +115,7 @@ let x86_compile_binary_op : x86environment -> operand list -> (operand * operand
       | (_, RegisterIndex _) -> (y::stack', [op (x, y)])
       | (_, _)               -> (y::stack', [X86Mov (x, x86eax); X86Mov (y, x86edx); op (x86eax, x86edx); X86Mov (x86edx, y)])
 
-let x86_compile_logical_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
+let x86_compile_binary_logical_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
     match stack with
     | [] | _::[]   -> assert false
@@ -104,7 +124,7 @@ let x86_compile_logical_op : x86environment -> operand list -> (operand * operan
       let process'     = (process x86eax x86al) @ (process x86edx x86dl) @ [op (x86eax, x86edx)] in
           (y::stack', [X86Mov (x, x86eax); X86Mov (y, x86edx)] @ process' @ [X86Mov (x86edx, y)]) 
 
-let x86_compile_compare_op : x86environment -> operand list -> (operand -> x86instr) -> (operand list) * (x86instr list) = 
+let x86_compile_binary_compare_op : x86environment -> operand list -> (operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
     match stack with
     | [] | _::[]   -> assert false
@@ -145,25 +165,19 @@ let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
              | RegisterIndex _ -> (stack', [X86Mov (s, VariableName x)])
              | _               -> (stack', [X86Mov (s, x86eax); X86Mov (x86eax, VariableName x)])
            )
-         | S_ADD    -> x86_compile_binary_op env stack (fun (x, y) -> X86Add (x, y))
-         | S_SUB    -> x86_compile_binary_op env stack (fun (x, y) -> X86Sub (x, y))
-         | S_MUL    -> x86_compile_binary_op env stack (fun (x, y) -> X86Mul (x, y))
-         | S_DIV    -> ( 
+         | S_BINARY_ARITHM_OP Div -> ( 
              match stack with
              | [] | _::[]   -> assert false
              | y::x::stack' -> (y::stack', [X86Mov (x, x86eax); X86Cld; X86Div y; X86Mov (x86eax, y)])
          )
-         | S_MOD    -> (
+         | S_BINARY_ARITHM_OP Mod -> (
              match stack with
              | [] | _::[]   -> assert false
              | y::x::stack' -> (y::stack', [X86Mov (x, x86eax); X86Cld; X86Mod y; X86Mov (x86edx, y)])
          )
-         | S_LE     -> x86_compile_compare_op env stack (fun x -> X86Setl  x)
-         | S_LEQ    -> x86_compile_compare_op env stack (fun x -> X86Setle x)
-         | S_GE     -> x86_compile_compare_op env stack (fun x -> X86Setg  x)
-         | S_GEQ    -> x86_compile_compare_op env stack (fun x -> X86Setge x)
-         | S_AND    -> x86_compile_logical_op env stack (fun (x, y) -> X86And (x, y))
-         | S_OR     -> x86_compile_logical_op env stack (fun (x, y) -> X86Or  (x, y))
+         | S_BINARY_ARITHM_OP  op -> x86_compile_binary_arithm_op  env stack (binary_arithm_op_to_asm op)
+         | S_BINARY_LOGICAL_OP op -> x86_compile_binary_logical_op env stack (binary_logical_op_to_asm op)
+         | S_BINARY_COMPARE_OP op -> x86_compile_binary_compare_op env stack (binary_compare_op_to_asm op)
        in
        x86code @ x86compile' stack' code'
   in

@@ -1,28 +1,36 @@
 open Data
 
 let bool_to_int b = match b with
-  | false -> 0
-  | true  -> 1
+| false -> 0
+| true  -> 1
 
 let int_to_bool x = match x with
-  | 0     -> false 
-  | _     -> true 
+| 0     -> false 
+| _     -> true 
 
-let rec eval state expr =
-  match expr with
-  | Const  n     -> n
-  | Var    x     -> state x
-  | Add   (l, r) -> eval state l  +   eval state r
-  | Sub   (l, r) -> eval state l  -   eval state r
-  | Mul   (l, r) -> eval state l  *   eval state r
-  | Div   (l, r) -> eval state l  /   eval state r
-  | Mod   (l, r) -> eval state l mod  eval state r
-  | Le    (l, r) -> bool_to_int (eval state l <  eval state r)
-  | Leq   (l, r) -> bool_to_int (eval state l <= eval state r)
-  | Ge    (l, r) -> bool_to_int (eval state l >  eval state r)
-  | Geq   (l, r) -> bool_to_int (eval state l >= eval state r)
-  | And   (l, r) -> bool_to_int (int_to_bool (eval state l) && int_to_bool (eval state r))
-  | Or    (l, r) -> bool_to_int (int_to_bool (eval state l) || int_to_bool (eval state r))
+let binary_op_to_fun op = match op with
+| Add -> (fun l r -> l + r)
+| Sub -> (fun l r -> l - r)
+| Mul -> (fun l r -> l * r)
+| Div -> (fun l r -> l / r)
+| Mod -> (fun l r -> l mod r)
+ 
+let compare_op_to_fun op = match op with
+| Le  -> (fun l r -> bool_to_int (l <  r))
+| Leq -> (fun l r -> bool_to_int (l <= r))
+| Ge  -> (fun l r -> bool_to_int (l >  r))
+| Geq -> (fun l r -> bool_to_int (l >= r))
+
+let logical_op_to_fun op = match op with
+| And -> (fun l r -> bool_to_int (int_to_bool l && int_to_bool r))
+| Or  -> (fun l r -> bool_to_int (int_to_bool l || int_to_bool r))
+
+let rec eval state expr = match expr with
+| Const  n     -> n
+| Var    x     -> state x
+| BinaryArithmExpr  (op, l, r) -> binary_op_to_fun  op (eval state l) (eval state r)
+| BinaryCompareExpr (op, l, r) -> compare_op_to_fun op (eval state l) (eval state r)
+| BinaryLogicalExpr (op, l, r) -> logical_op_to_fun op (eval state l) (eval state r)
 
 let run input stmt =
   let rec run' ((state, input, output) as c) stmt =
@@ -72,28 +80,12 @@ let srun input code =
              | []        -> assert false
              | y::stack' -> ((x, y)::state, stack', input, output)
           )
-          | S_ADD ->
-             (state, srun stack (fun x y -> x + y), input, output)
-          | S_SUB ->
-             (state, srun stack (fun x y -> x - y), input, output)
-          | S_MUL ->
-             (state, srun stack (fun x y -> x * y), input, output)
-          | S_DIV -> 
-             (state, srun stack (fun x y -> x / y), input, output)
-          | S_MOD -> 
-             (state, srun stack (fun x y -> x mod y), input, output)
-          | S_LE  -> 
-             (state, srun stack (fun x y -> bool_to_int (x < y)), input, output)
-          | S_LEQ -> 
-             (state, srun stack (fun x y -> bool_to_int (x <= y)), input, output)
-          | S_GE  -> 
-             (state, srun stack (fun x y -> bool_to_int (x < y)), input, output)
-          | S_GEQ -> 
-             (state, srun stack (fun x y -> bool_to_int (x <= y)), input, output)
-          | S_AND -> 
-             (state, srun stack (fun x y -> bool_to_int (int_to_bool x && int_to_bool y)), input, output)
-          | S_OR  -> 
-             (state, srun stack (fun x y -> bool_to_int (int_to_bool x || int_to_bool y)), input, output)
+          | S_BINARY_ARITHM_OP  op -> 
+             (state, srun stack (fun x y -> binary_op_to_fun  op x y), input, output)
+          | S_BINARY_COMPARE_OP op -> 
+             (state, srun stack (fun x y -> compare_op_to_fun op x y), input, output)
+          | S_BINARY_LOGICAL_OP op -> 
+             (state, srun stack (fun x y -> logical_op_to_fun op x y), input, output)
          )
          code'
   in
