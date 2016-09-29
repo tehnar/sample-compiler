@@ -12,8 +12,10 @@ ostap (
     l:op3 suf:("&&" r:op3)* {List.fold_left (fun l (op, r) -> BinaryLogicalExpr (And, l, r)) l suf};
 
   op3:
-    l:op2 suf:(("<="|"<"|">="|">") r:op2)* {List.fold_left (fun l (op, r) -> 
+    l:op2 suf:(("=="|"!="|"<="|"<"|">="|">") r:op2)* {List.fold_left (fun l (op, r) -> 
       match op with 
+      | ("==", _) -> BinaryCompareExpr (Eq,  l, r)
+      | ("!=", _) -> BinaryCompareExpr (Neq, l, r)
       | ("<", _)  -> BinaryCompareExpr (Le,  l, r)
       | ("<=", _) -> BinaryCompareExpr (Leq, l, r)
       | (">", _)  -> BinaryCompareExpr (Ge,  l, r)
@@ -45,10 +47,16 @@ ostap (
   | -"(" expr -")";
 
   stmt:
-    s1:simple ";" s2:stmt       { Seq    (s1, s2) }
-  | simple;
+    s1:builtin ";" s2:stmt       { Seq    (s1, s2) }
+  | s1:construction s2:stmt      { Seq    (s1, s2) }
+  | "" {Skip};
 
-  simple:
+  construction: 
+    %"if" e:expr "{" s1:stmt "}" "else" "{" s2: stmt "}" {If (e, s1, s2)}
+  | %"if" e:expr "{" s1:stmt "}" {If (e, s1, Skip)}
+  | %"while" e:expr "{" s:stmt "}" {While (e, s)};
+
+  builtin:
     %"read"  "(" name:IDENT ")" { Read name       }
   | %"write" "(" e:expr     ")" { Write e         }
   | %"skip"                     { Skip            }

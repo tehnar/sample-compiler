@@ -31,6 +31,7 @@ type x86instr =
   | X86Mov       of operand * operand
   | X86Xor       of operand * operand
   | X86Cmp       of operand * operand
+  | X86Test      of operand * operand
   | X86Push      of operand
   | X86Pop       of operand
   | X86Div       of operand
@@ -40,9 +41,14 @@ type x86instr =
   | X86Setg      of operand
   | X86Setge     of operand
   | X86Setne     of operand
+  | X86Sete      of operand
+  | X86Jz        of string
+  | X86Jnz       of string
+  | X86Jmp       of string
   | X86Ret
   | X86Cld    
-  | X86Call          of string
+  | X86Call      of string
+  | X86Label     of string
 
 module S = Set.Make (String)
 
@@ -72,6 +78,7 @@ let x86print : x86instr -> string = function
   | X86Xor  (s1, s2)    -> Printf.sprintf "\txorl\t%s,\t%s"  (slot s1) (slot s2)
   | X86And  (s1, s2)    -> Printf.sprintf "\tandl\t%s,\t%s"  (slot s1) (slot s2)
   | X86Or   (s1, s2)    -> Printf.sprintf "\torl\t%s,\t%s"   (slot s1) (slot s2)
+  | X86Test (s1, s2)    -> Printf.sprintf "\ttest\t%s,\t%s"   (slot s1) (slot s2)
   | X86Push  s          -> Printf.sprintf "\tpushl\t%s"      (slot s )
   | X86Pop   s          -> Printf.sprintf "\tpopl\t%s"       (slot s )
   | X86Div   s          -> Printf.sprintf "\tidivl\t%s"      (slot s )
@@ -81,10 +88,15 @@ let x86print : x86instr -> string = function
   | X86Setle s          -> Printf.sprintf "\tsetle\t%s"      (slot s )
   | X86Setg  s          -> Printf.sprintf "\tsetg\t%s"       (slot s )
   | X86Setge s          -> Printf.sprintf "\tsetge\t%s"      (slot s )
+  | X86Sete  s          -> Printf.sprintf "\tsete\t%s"       (slot s )
   | X86Setne s          -> Printf.sprintf "\tsetne\t%s"      (slot s )
+  | X86Jz    s          -> Printf.sprintf "\tjz\t%s"          s
+  | X86Jnz   s          -> Printf.sprintf "\tjnz\t%s"          s
+  | X86Jmp   s          -> Printf.sprintf "\tjmp\t%s"         s
   | X86Ret              -> "\tret"
-  | X86Call  p          -> Printf.sprintf "\tcall\t%s" p
-  | X86Cld       -> Printf.sprintf "\tcdq"
+  | X86Call  s          -> Printf.sprintf "\tcall\t%s" s
+  | X86Label s          -> Printf.sprintf "%s:" s
+  | X86Cld              -> Printf.sprintf "\tcdq"
 
 
 let binary_arithm_op_to_asm = fun op -> 
@@ -100,11 +112,18 @@ let binary_compare_op_to_asm = fun op ->
   | Leq -> (fun l -> X86Setle l)
   | Ge  -> (fun l -> X86Setg  l)
   | Geq -> (fun l -> X86Setge l)
+  | Eq  -> (fun l -> X86Sete  l)
+  | Neq -> (fun l -> X86Setne l)
 
 let binary_logical_op_to_asm = fun op -> 
   match op with
   | Or  -> (fun (l, r) -> X86Or  (l, r))
   | And -> (fun (l, r) -> X86And (l, r))
+
+let conditional_jmp_to_asm = fun op label -> 
+  match op with
+  | Jz  -> X86Jz  label
+  | Jnz -> X86Jnz label
 
 let x86_compile_binary_arithm_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
@@ -129,6 +148,13 @@ let x86_compile_binary_compare_op : x86environment -> operand list -> (operand -
     match stack with
     | [] | _::[]   -> assert false
     | x::y::stack' -> (y::stack', [X86Mov (y, x86eax); X86Cmp (x86eax, x); X86Mov (Literal 0, x86eax); op x86al; X86Mov(x86eax, y)])
+
+let x86_compile_conditional_jmp: x86environment -> operand list -> x86instr -> (operand list) * (x86instr list) = 
+  fun env stack op ->
+    match stack with
+    | []        -> assert false
+    | (RegisterIndex x)::stack' -> (stack', [X86Test (RegisterIndex x, RegisterIndex x); op])
+    | x::stack'                 -> (stack', [X86Mov (x, x86eax); X86Test(x86eax, x86eax); op])
 
 let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
   let rec x86compile' stack code =
@@ -178,14 +204,17 @@ let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
          | S_BINARY_ARITHM_OP  op -> x86_compile_binary_arithm_op  env stack (binary_arithm_op_to_asm op)
          | S_BINARY_LOGICAL_OP op -> x86_compile_binary_logical_op env stack (binary_logical_op_to_asm op)
          | S_BINARY_COMPARE_OP op -> x86_compile_binary_compare_op env stack (binary_compare_op_to_asm op)
+         | S_CONDITIONAL_JMP (op, label) -> x86_compile_conditional_jmp env stack (conditional_jmp_to_asm op label)
+         | S_JMP   label -> (stack, [X86Jmp label])
+         | S_LABEL label -> (stack, [X86Label label])
        in
        x86code @ x86compile' stack' code'
   in
   x86compile' [] code
 
-let genasm statement =
+let genasm code =
   let env = new x86environment in
-  let code = x86compile env @@ StackMachineCompiler.compile_statement statement in
+  let code' = x86compile env @@ StackMachineCompiler.compile_code code in
   let asm = Buffer.create 1024 in
   let (!!) s = Buffer.add_string asm s in
   let (!)  s = !!s; !!"\n" in
@@ -211,7 +240,7 @@ let genasm statement =
   in
   !"main:";
   prologue();
-  List.iter (fun i -> !(x86print i)) code;
+  List.iter (fun i -> !(x86print i)) code';
   epilogue();
   !"\txorl\t%eax,\t%eax";
   !"\tret";
