@@ -18,7 +18,12 @@ let parse infile =
 
 let main = ()
   try
-    let filename = Sys.argv.(1) in
+    let mode, filename =
+      match Sys.argv.(1) with
+      | "-s" -> `SM , Sys.argv.(2)
+      | "-o" -> `X86, Sys.argv.(2)
+      | _    -> `Int, Sys.argv.(1)
+    in
     match parse filename with
     | `Ok stmt -> 
 	let rec read acc =
@@ -28,9 +33,18 @@ let main = ()
 	    read (acc @ [r]) 
           with End_of_file -> acc
 	in
-	let input = read [] in	
-	let output = Interpreter.Stmt.eval input stmt in
-	List.iter (fun i -> Printf.printf "%d\n" i) output
+	let input = read [] in
+	(match mode with
+	 | `X86 -> failwith "native not supported"
+	 | `SM  ->
+	     let output = 
+	       StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt) 
+	     in
+	     List.iter (fun i -> Printf.printf "%d\n" i) output
+	 | `Int -> 
+	     let output = Interpreter.Stmt.eval input stmt in
+	     List.iter (fun i -> Printf.printf "%d\n" i) output
+	)
 
     | `Fail er -> Printf.eprintf "%s" er
   with 
