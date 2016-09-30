@@ -1,10 +1,11 @@
-TESTS=test001 test002 test003
+TESTS=test001 test002 test003 test004 test005 test006 test007 test008 test012 test013
 
 .PHONY: check $(TESTS)
-check: $(TESTS)
 
-$(TESTS): %: %.expr %.input orig/%.log
-	../src/rc.byte $@.expr && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
+check: $(TESTS) 
+
+$(TESTS): %: %.expr
+	../src/rc.byte $< && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
 
 clean:
-	rm *.log *.s *~
+	rm -f test*.log *.s *~ $(TESTS)

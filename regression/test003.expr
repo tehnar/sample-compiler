@@ -1,4 +1,5 @@
-read(x);
-read(y);
-z := x + y;
-write(z * 2)
+read (x);
+read (y);
+write (x-y);
+write (x/y);
+write (x%y)
