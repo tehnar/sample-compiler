@@ -251,4 +251,4 @@ let build statement name =
   let outf = open_out (Printf.sprintf "%s.s" name) in
   Printf.fprintf outf "%s" (genasm statement);
   close_out outf;
-  Sys.command (Printf.sprintf "gcc -m32 -o %s ../runtime/runtime.o %s.s" name name)
+  ignore (Sys.command (Printf.sprintf "gcc -m32 -o %s runtime.o %s.s" name name))

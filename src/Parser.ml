@@ -6,7 +6,7 @@ ostap (
   expr: op5; 
 
   op5:
-    l:op4 suf:("||" r:op4)* {List.fold_left (fun l (op, r) -> BinaryLogicalExpr (Or, l, r)) l suf};
+    l:op4 suf:("!!" r:op4)* {List.fold_left (fun l (op, r) -> BinaryLogicalExpr (Or, l, r)) l suf};
 
   op4:
     l:op3 suf:("&&" r:op3)* {List.fold_left (fun l (op, r) -> BinaryLogicalExpr (And, l, r)) l suf};
@@ -49,6 +49,8 @@ ostap (
   stmt:
     s1:builtin ";" s2:stmt       { Seq    (s1, s2) }
   | s1:construction s2:stmt      { Seq    (s1, s2) }
+  | s1:builtin                   { s1 }
+  | s1:construction              { s1 }
   | "" {Skip};
 
   construction: 

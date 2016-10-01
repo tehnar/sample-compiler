@@ -33,4 +33,31 @@ type instr =
   | S_BINARY_COMPARE_OP  of binary_compare_op
   | S_BINARY_LOGICAL_OP  of binary_logical_op
 
+let bool_to_int b = match b with
+| false -> 0
+| true  -> 1
+
+let int_to_bool x = match x with
+| 0     -> false 
+| _     -> true 
+
+let binary_op_to_fun op = match op with
+| Add -> (fun l r -> l + r)
+| Sub -> (fun l r -> l - r)
+| Mul -> (fun l r -> l * r)
+| Div -> (fun l r -> l / r)
+| Mod -> (fun l r -> l mod r)
+ 
+let compare_op_to_fun op = match op with
+| Le  -> (fun l r -> bool_to_int (l <  r))
+| Leq -> (fun l r -> bool_to_int (l <= r))
+| Ge  -> (fun l r -> bool_to_int (l >  r))
+| Geq -> (fun l r -> bool_to_int (l >= r))
+| Eq  -> (fun l r -> bool_to_int (l == r))
+| Neq -> (fun l r -> bool_to_int (l != r))
+
+let logical_op_to_fun op = match op with
+| And -> (fun l r -> bool_to_int (int_to_bool l && int_to_bool r))
+| Or  -> (fun l r -> bool_to_int (int_to_bool l || int_to_bool r))
+
 exception Compilation_Error of string
