@@ -26,23 +26,24 @@ let main = ()
     in
     match parse filename with
     | `Ok stmt -> 
-	let rec read acc =
-	  try
-	    let r = read_int () in
-	    Printf.printf "> ";
-	    read (acc @ [r]) 
-          with End_of_file -> acc
-	in
-	let input = read [] in
 	(match mode with
-	 | `X86 -> failwith "native not supported"
-	 | `SM  ->
-	     let output = 
-	       StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt) 
+	 | `X86 ->
+             let basename = Filename.chop_suffix filename ".expr" in 
+	     X86.build stmt basename
+	 | _ ->
+	     let rec read acc =
+	       try
+		 let r = read_int () in
+		 Printf.printf "> ";
+		 read (acc @ [r]) 
+               with End_of_file -> acc
 	     in
-	     List.iter (fun i -> Printf.printf "%d\n" i) output
-	 | `Int -> 
-	     let output = Interpreter.Stmt.eval input stmt in
+	     let input = read [] in
+	     let output =
+	       match mode with
+	       | `SM -> StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt)
+	       | _   -> Interpreter.Stmt.eval input stmt
+	     in
 	     List.iter (fun i -> Printf.printf "%d\n" i) output
 	)
 
