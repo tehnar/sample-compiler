@@ -10,12 +10,12 @@ let find_label code label =
   let indexed_code = List.mapi (fun x y -> (x, y)) code in
   let positions = List.find_all (fun (x, cmd) ->
   match cmd with
-  | S_LABEL label -> true
-  | _             -> false) indexed_code
+  | S_LABEL label' -> label == label'
+  | _              -> false) indexed_code
   in match positions with
   | [(x, y)] -> x
   | []  -> raise (Compilation_Error (Printf.sprintf "No label %s found" label))
-  | _   -> raise (Compilation_Error (Printf.sprintf "Multiple labels %s found" label))
+  | _   -> raise (Compilation_Error (Printf.sprintf "%d labels '%s' found instead of one" (List.length positions) label))
 
 let check_jmp_condition jmp x = 
   match jmp with 
