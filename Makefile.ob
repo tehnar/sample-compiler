@@ -79,7 +79,7 @@ regression: tests
 test: tests
 
 ######################## Installation related stuff ##########################
-INSTALL_TARGETS=META \
+INSTALL_TARGETS=
 
 
 MAYBE_INSTALL_TARGETS=\
