@@ -1,16 +1,14 @@
-x := 2;
-y := 3;
-if (x < y) {
-  if (1 + ((((((2 + 3) + 4) + 5) + 6) + 7) + 8) > 7) {
-    write(1);
-  } else {
-    write(2);
-  }
-} else {
-  write(3);
-}
-if (y > x) {
-  write(0);
-} else {
-  write(1);
-}
+read (x);
+read (y);
+z := x < y;
+write (z);
+z := x <= y;
+write (z);
+z := x == y;
+write (z);
+z := x != y;
+write (z);
+z := x >= y;
+write (z);
+z := x > y;
+write (z)

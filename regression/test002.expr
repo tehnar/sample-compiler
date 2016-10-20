@@ -1,5 +1,4 @@
-read (x); read (y);
-write (x + x + x + x + x + x + x + x + x + x + x + x + x + x + x);
-write (y + (y + (y + (y + (y + (y + (y + (y + (y + (y + (y + (y + (y + (y + y))))))))))))));
-write (x - y - y - y);
-write (y - x - x);
+read (x); 
+read (y); 
+z := y*y; 
+write (x+z) 

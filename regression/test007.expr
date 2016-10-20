@@ -1,11 +1,4 @@
-x := 0;
-y := 0;
-while (x < 10) {
-  write(x);
-  while (y == 3) {
-    y := y + 1;
-  }
-  y := y + x;
-  x := x + 1;
-}
-write(y);
+x := 1;
+y := 2;
+z := x - y - 3;
+write (z)

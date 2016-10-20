@@ -1,14 +1,17 @@
 TESTS=$(basename $(wildcard generated*.expr))
 
-.PHONY: check $(TESTS)
+.PHONY: check runtime $(TESTS) $(INTERPRETER_TESTS) 
 
-check: $(TESTS)
+check: runtime $(TESTS)
+
+runtime: 
+	cp ../../runtime/runtime.o ./
 
 $(TESTS): %: %.expr
-	cp ../../runtime/runtime.o ./
-	../../src/rc.byte -o $< && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
-	cat $@.input | RC_RUNTIME=../../runtime ../../src/rc.byte -i $< > $@.log && diff $@.log orig/$@.log
-	cat $@.input | RC_RUNTIME=../../runtime ../../src/rc.byte -s $< > $@.log && diff $@.log orig/$@.log
+	../../rc.native -o $< && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
+	cat $@.input | RC_RUNTIME=../../runtime ../../rc.native -i $< > $@.log && diff $@.log orig/$@.log
+	cat $@.input | RC_RUNTIME=../../runtime ../../rc.native -s $< > $@.log && diff $@.log orig/$@.log
+	rm $@.log $@ $@.s
 
 clean:
 	rm -f *.log *.s *~ $(TESTS)

@@ -48,15 +48,15 @@ ostap (
 
   stmt:
     s1:builtin ";" s2:stmt       { Seq    (s1, s2) }
-  | s1:construction s2:stmt      { Seq    (s1, s2) }
+  | s1:construction ";" s2:stmt      { Seq    (s1, s2) }
   | s1:builtin                   { s1 }
   | s1:construction              { s1 }
   | "" {Skip};
 
   construction: 
-    %"if" e:expr "{" s1:stmt "}" "else" "{" s2: stmt "}" {If (e, s1, s2)}
-  | %"if" e:expr "{" s1:stmt "}" {If (e, s1, Skip)}
-  | %"while" e:expr "{" s:stmt "}" {While (e, s)};
+    %"if" e:expr "then" s1:stmt "else" s2: stmt "fi" {If (e, s1, s2)}
+  | %"if" e:expr "then" s1:stmt "fi" {If (e, s1, Skip)}
+  | %"while" e:expr "do" s:stmt "od" {While (e, s)};
 
   builtin:
     %"read"  "(" name:IDENT ")" { Read name       }
