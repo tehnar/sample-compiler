@@ -48,15 +48,22 @@ ostap (
 
   stmt:
     s1:builtin ";" s2:stmt       { Seq    (s1, s2) }
-  | s1:construction ";" s2:stmt      { Seq    (s1, s2) }
+  | s1:construction ";" s2:stmt  { Seq    (s1, s2) }
   | s1:builtin                   { s1 }
   | s1:construction              { s1 }
   | "" {Skip};
 
   construction: 
-    %"if" e:expr "then" s1:stmt "else" s2: stmt "fi" {If (e, s1, s2)}
-  | %"if" e:expr "then" s1:stmt "fi" {If (e, s1, Skip)}
-  | %"while" e:expr "do" s:stmt "od" {While (e, s)};
+    %"if" e:expr %"then" s1:stmt elifs:(%"elif" expr %"then" stmt)* els:(%"else" stmt)? %"fi" {
+      If (e, s1, 
+        List.fold_right (fun (e, s) r -> If (e, s, r)) 
+        elifs 
+        (match els with None -> Skip | Some x -> x)
+      )
+    }
+  | %"repeat" s:stmt %"until" e:expr {Seq (s, While (BinaryCompareExpr (Eq, e, Const 0), s))}
+  | %"while" e:expr %"do" s:stmt %"od" {While (e, s)}
+  | %"for" s1:stmt "," e:expr "," s2:stmt %"do" s:stmt %"od" {Seq(s1, While (e, Seq(s, s2)))};
 
   builtin:
     %"read"  "(" name:IDENT ")" { Read name       }
