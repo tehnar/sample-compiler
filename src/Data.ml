@@ -33,13 +33,9 @@ type instr =
   | S_BINARY_COMPARE_OP  of binary_compare_op
   | S_BINARY_LOGICAL_OP  of binary_logical_op
 
-let bool_to_int b = match b with
-| false -> 0
-| true  -> 1
+let bool_to_int b = if b then 1 else 0
 
-let int_to_bool x = match x with
-| 0     -> false 
-| _     -> true 
+let int_to_bool x = if x == 0 then false else true
 
 let binary_op_to_fun op = match op with
 | Add -> (fun l r -> l + r)

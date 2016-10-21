@@ -22,6 +22,7 @@ let allocate env stack =
   | (RegisterIndex n)::_ when n < num_of_regs-1 -> RegisterIndex (n+1)
   | _                                           -> env#allocate 0; StackIndex 0
 
+type setsuffix = SetLe | SetLeq | SetGe | SetGeq | SetEq | SetNeq
 type x86instr =
   | X86Add       of operand * operand
   | X86Sub       of operand * operand
@@ -36,12 +37,7 @@ type x86instr =
   | X86Pop       of operand
   | X86Div       of operand
   | X86Mod       of operand
-  | X86Setl      of operand
-  | X86Setle     of operand
-  | X86Setg      of operand
-  | X86Setge     of operand
-  | X86Setne     of operand
-  | X86Sete      of operand
+  | X86Set       of setsuffix * operand
   | X86Jz        of string
   | X86Jnz       of string
   | X86Jmp       of string
@@ -70,6 +66,15 @@ let slot : operand -> string = function
   | (Literal i) -> Printf.sprintf "$%d" i
   | (RegisterLowerIndex i) -> x86lower_regs.(i)
 
+let suf_to_str suf = 
+  match suf with
+  | SetLe  -> "l"
+  | SetLeq -> "le"
+  | SetGe  -> "g"
+  | SetGeq -> "ge"
+  | SetEq  -> "e"
+  | SetNeq -> "ne"
+
 let x86print : x86instr -> string = function
   | X86Add  (s1, s2)    -> Printf.sprintf "\taddl\t%s,\t%s"  (slot s1) (slot s2)
   | X86Sub  (s1, s2)    -> Printf.sprintf "\tsubl\t%s,\t%s"  (slot s1) (slot s2)
@@ -84,12 +89,7 @@ let x86print : x86instr -> string = function
   | X86Div   s          -> Printf.sprintf "\tidivl\t%s"      (slot s )
   | X86Mod   s          -> Printf.sprintf "\tidivl\t%s"      (slot s )
   | X86Cmp  (s1, s2)    -> Printf.sprintf "\tcmpl\t%s,\t%s"  (slot s2) (slot s1) (*Not an error, that's GAS syntax: cmp arg2, arg1 *)
-  | X86Setl  s          -> Printf.sprintf "\tsetl\t%s"       (slot s )
-  | X86Setle s          -> Printf.sprintf "\tsetle\t%s"      (slot s )
-  | X86Setg  s          -> Printf.sprintf "\tsetg\t%s"       (slot s )
-  | X86Setge s          -> Printf.sprintf "\tsetge\t%s"      (slot s )
-  | X86Sete  s          -> Printf.sprintf "\tsete\t%s"       (slot s )
-  | X86Setne s          -> Printf.sprintf "\tsetne\t%s"      (slot s )
+  | X86Set  (suf, s)    -> Printf.sprintf "\tset%s\t%s"     (suf_to_str suf) (slot s)
   | X86Jz    s          -> Printf.sprintf "\tjz\t%s"          s
   | X86Jnz   s          -> Printf.sprintf "\tjnz\t%s"          s
   | X86Jmp   s          -> Printf.sprintf "\tjmp\t%s"         s
@@ -108,12 +108,12 @@ let binary_arithm_op_to_asm = fun op ->
 
 let binary_compare_op_to_asm = fun op -> 
   match op with
-  | Le  -> (fun l -> X86Setl  l)
-  | Leq -> (fun l -> X86Setle l)
-  | Ge  -> (fun l -> X86Setg  l)
-  | Geq -> (fun l -> X86Setge l)
-  | Eq  -> (fun l -> X86Sete  l)
-  | Neq -> (fun l -> X86Setne l)
+  | Le  -> (fun l -> X86Set (SetLe,  l))
+  | Leq -> (fun l -> X86Set (SetLeq, l))
+  | Ge  -> (fun l -> X86Set (SetGe,  l))
+  | Geq -> (fun l -> X86Set (SetGeq, l))
+  | Eq  -> (fun l -> X86Set (SetEq,  l))
+  | Neq -> (fun l -> X86Set (SetNeq, l))
 
 let binary_logical_op_to_asm = fun op -> 
   match op with
@@ -132,22 +132,36 @@ let x86_compile_binary_arithm_op : x86environment -> operand list -> (operand * 
     | x::y::stack' -> 
       match (x, y) with
       | (_, RegisterIndex _) -> (y::stack', [op (x, y)])
-      | (_, _)               -> (y::stack', [X86Mov (x, x86eax); X86Mov (y, x86edx); op (x86eax, x86edx); X86Mov (x86edx, y)])
+      | (_, _)               -> (y::stack', [X86Mov (x, x86eax); 
+                                             X86Mov (y, x86edx); 
+                                             op (x86eax, x86edx); 
+                                             X86Mov (x86edx, y)])
 
 let x86_compile_binary_logical_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
     match stack with
     | [] | _::[]   -> assert false
     | x::y::stack' -> 
-      let process x x' = [X86Or (Literal 0, x); X86Mov (Literal 0, x); X86Setne x'] in
-      let process'     = (process x86eax x86al) @ (process x86edx x86dl) @ [op (x86eax, x86edx)] in
-          (y::stack', [X86Mov (x, x86eax); X86Mov (y, x86edx)] @ process' @ [X86Mov (x86edx, y)]) 
+      let process x x' = [X86Or (Literal 0, x); 
+                          X86Mov (Literal 0, x); 
+                          X86Set (SetNeq, x')] in
+      let process'     = (process x86eax x86al) @ 
+                         (process x86edx x86dl) @ 
+                         [op (x86eax, x86edx)] in
+          (y::stack', [X86Mov (x, x86eax); 
+                       X86Mov (y, x86edx)] @ 
+                       process' @ 
+                       [X86Mov (x86edx, y)]) 
 
 let x86_compile_binary_compare_op : x86environment -> operand list -> (operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
     match stack with
     | [] | _::[]   -> assert false
-    | x::y::stack' -> (y::stack', [X86Mov (y, x86eax); X86Cmp (x86eax, x); X86Mov (Literal 0, x86eax); op x86al; X86Mov(x86eax, y)])
+    | x::y::stack' -> (y::stack', [X86Mov (y, x86eax); 
+                                   X86Cmp (x86eax, x); 
+                                   X86Mov (Literal 0, x86eax); 
+                                   op x86al; 
+                                   X86Mov(x86eax, y)])
 
 let x86_compile_conditional_jmp: x86environment -> operand list -> x86instr -> (operand list) * (x86instr list) = 
   fun env stack op ->
@@ -251,4 +265,8 @@ let build statement name =
   let outf = open_out (Printf.sprintf "%s.s" name) in
   Printf.fprintf outf "%s" (genasm statement);
   close_out outf;
-  ignore (Sys.command (Printf.sprintf "gcc -m32 -o %s runtime.o %s.s" name name))
+  let runtime_dir = try
+    Sys.getenv "RC_RUNTIME"
+    with Not_found -> "../runtime"
+  in  
+  ignore (Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" name runtime_dir name))
