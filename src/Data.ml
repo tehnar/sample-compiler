@@ -36,6 +36,10 @@ type instr =
   | S_BINARY_ARITHM_OP   of binary_arithm_op
   | S_BINARY_COMPARE_OP  of binary_compare_op
   | S_BINARY_LOGICAL_OP  of binary_logical_op
+  | S_CALL               of string * string list
+  | S_RET                of int
+  | S_POP
+  | S_END
 
 let bool_to_int b = if b then 1 else 0
 

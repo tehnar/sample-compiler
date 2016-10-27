@@ -43,16 +43,16 @@ ostap (
 
   primary:
     c:DECIMAL      { Const c }
-  | x:functionCall { x }
+  | x:function_call { x }
   | x:IDENT        { Var   x }
   | -"(" expr -")";
 
   stmt:
-    s1:functionDef s2:stmt         { Seq (s1, s2) }
-  | s1:simpleStatement ";" s2:stmt { Seq (s1, s2) }
-  | s1:simpleStatement             { s1 };
+    s1:function_def s2:stmt         { Seq (s1, s2) }
+  | s1:simple_statement ";" s2:stmt { Seq (s1, s2) }
+  | s1:simple_statement             { s1 };
 
-  simpleStatement: 
+  simple_statement: 
     %"if" e:expr %"then" s1:stmt elifs:(%"elif" expr %"then" stmt)* els:(%"else" stmt)? %"fi" {
       If (e, s1, 
         List.fold_right (fun (e, s) r -> If (e, s, r)) 
@@ -68,17 +68,17 @@ ostap (
   | %"skip"                     { Skip            }
   | %"return" e:expr            { Return e        }
   | x:IDENT ":=" e:expr         { Assign (x , e)  }
-  | s:functionDef        { s }
-  | s:functionCall { match s with FunctionCallExpr (name, args) -> FunctionCallStatement (name, args) | _ -> assert false }
+  | s:function_def        { s }
+  | s:function_call { match s with FunctionCallExpr (name, args) -> FunctionCallStatement (name, args) | _ -> assert false }
   | "" {Skip};
 
-  functionDef:
-    funName:IDENT "(" firstArg:IDENT args:(-"," IDENT)* ")" %"begin" body:stmt %"end" {FunctionDef (funName, firstArg::args, body)}
-  | funName:IDENT "(" ")" %"begin" body:stmt %"end"                               {FunctionDef (funName, [], body)};
+  function_def:
+    fun_name:IDENT "(" first_arg:IDENT args:(-"," IDENT)* ")" %"begin" body:stmt %"end" {FunctionDef (fun_name, first_arg::args, body)}
+  | fun_name:IDENT "(" ")" %"begin" body:stmt %"end"                               {FunctionDef (fun_name, [], body)};
 
-  functionCall:
-    funName:IDENT "(" firstArg:expr args:(-"," expr)* ")" {FunctionCallExpr (funName, firstArg::args)}
-  | funName:IDENT "(" ")"                                 {FunctionCallExpr (funName, [])}
+  function_call:
+    fun_name:IDENT "(" first_arg:expr args:(-"," expr)* ")" {FunctionCallExpr (fun_name, first_arg::args)}
+  | fun_name:IDENT "(" ")"                                 {FunctionCallExpr (fun_name, [])}
 )
 
 let parse infile =
