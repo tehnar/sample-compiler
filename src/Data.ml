@@ -9,6 +9,7 @@ type expr =
   | BinaryArithmExpr  of binary_arithm_op  * expr * expr
   | BinaryCompareExpr of binary_compare_op * expr * expr
   | BinaryLogicalExpr of binary_logical_op * expr * expr
+  | FunctionCallExpr  of string * (expr list)
 
 type statement =
   | Skip
@@ -17,7 +18,10 @@ type statement =
   | Assign of string * expr
   | Seq    of statement * statement
   | If     of expr * statement * statement
-  | While  of expr * statement
+  | While  of expr * statement 
+  | Return of expr
+  | FunctionCallStatement of string * (expr list)
+  | FunctionDef of string * (string list) * statement
 
 
 type instr =

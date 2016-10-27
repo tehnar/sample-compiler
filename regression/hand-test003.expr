@@ -1,0 +1,11 @@
+f() begin
+    for i := 0, i < 1000000000, i := i + 1 do
+        read(x);
+        write(i);
+        write(2 * x);
+        if i == 5 then return 0; fi
+    od;     
+end
+
+read(x);
+f();

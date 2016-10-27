@@ -1,0 +1,13 @@
+g(x) begin
+    write(x);
+    if x == 10 then return 0 fi;
+    return f(x + 1);
+end
+
+f(x) begin
+    y:=g(x);
+    write(x);
+    return y;
+end
+
+write(f(0))

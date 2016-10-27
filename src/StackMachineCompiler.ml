@@ -7,6 +7,7 @@ let rec compile_expr expr =
   | BinaryArithmExpr  (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_ARITHM_OP  op]
   | BinaryCompareExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_COMPARE_OP op]
   | BinaryLogicalExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_LOGICAL_OP op]
+  | FunctionCallExpr _ -> assert false (*TODO*)
 
 let rec compile_statement stmt label_num =
   match stmt with
@@ -39,6 +40,9 @@ let rec compile_statement stmt label_num =
         [S_LABEL cond_label] @ compile_expr cond @ [S_CONDITIONAL_JMP (Jnz, while_label)],
         label_num'
       )
+  | FunctionDef _ -> assert false (*TODO*)
+  | FunctionCallStatement _  -> assert false (*TODO*)
+  | Return _ -> assert false (*TODO*)
  
 let compile_code code = 
   let first (x, y) = x in
