@@ -1,0 +1,20 @@
+f(a, b, c, d) begin
+    write(a);
+    write(b);
+    write(c);
+    write(g(c, d));
+    return 0;
+end
+
+g(a, b) begin
+    return a * b;
+end
+
+a := 4;
+b := 3;
+c := 2;
+d := 1;
+write(f(d, c, b, a));
+
+
+

@@ -1,23 +1,29 @@
 open Data 
 
-let rec compile_expr expr =
+let func_name_to_label func_name = Printf.sprintf "func%s" func_name
+
+let rec call_function (func_name, ops) = 
+  let compiled_ops = List.map (fun e -> compile_expr e) ops in
+  List.flatten (List.rev compiled_ops) @ [S_CALL func_name_to_label func_name]
+
+and compile_expr expr =
   match expr with
   | Var    x     -> [S_LD   x]
   | Const  n     -> [S_PUSH n]
   | BinaryArithmExpr  (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_ARITHM_OP  op]
   | BinaryCompareExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_COMPARE_OP op]
   | BinaryLogicalExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_LOGICAL_OP op]
-  | FunctionCallExpr _ -> assert false (*TODO*)
+  | FunctionCallExpr (x, y) -> call_function (x, y)
 
-let rec compile_statement stmt label_num =
+and compile_statement stmt label_num =
   match stmt with
   | Skip          -> ([], label_num)
   | Assign (x, e) -> (compile_expr e @ [S_ST x], label_num)
   | Read    x     -> ([S_READ; S_ST x], label_num)
   | Write   e     -> (compile_expr e @ [S_WRITE], label_num)
   | Seq    (l, r) -> 
-      let (l_compiled,  label_num')  = compile_statement l label_num  in
-      let (r_compiled,  label_num'') = compile_statement r label_num' in
+      let (l_compiled, label_num')  = compile_statement l label_num  in
+      let (r_compiled, label_num'') = compile_statement r label_num' in
       (l_compiled @ r_compiled, label_num'')
 
   | If (cond, if_block, else_block) -> 
@@ -40,10 +46,14 @@ let rec compile_statement stmt label_num =
         [S_LABEL cond_label] @ compile_expr cond @ [S_CONDITIONAL_JMP (Jnz, while_label)],
         label_num'
       )
-  | FunctionDef _ -> assert false (*TODO*)
-  | FunctionCallStatement _  -> assert false (*TODO*)
-  | Return _ -> assert false (*TODO*)
+  | FunctionDef (func_name, args, body)  -> 
+      let lbl = S_LABEL (func_name_to_label func_name) in
+      let beg = S_FUNC_BEGIN args in  
+      let body', label_num' = compile_statement body label_num in
+      (lbl::beg::body' @ [S_FUNC_END], label_num')
+
+  | FunctionCallStatement (x, y) -> (call_function (x, y) @ [S_DROP], label_num)
+  | Return e -> (compile_expr e @ [S_RET], label_num)
  
 let compile_code code = 
-  let first (x, y) = x in
-  first (compile_statement code 0)
+  let (code, _) = (compile_statement code 0) in code
