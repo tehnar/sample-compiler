@@ -23,6 +23,7 @@ let main = ()
       | "-s" -> `SM , Sys.argv.(2)
       | "-o" -> `X86, Sys.argv.(2)
       | "-i" -> `Int, Sys.argv.(2)
+      | _ -> raise (Invalid_argument "invalid flag")
     in
     match parse filename with
     | `Ok stmt -> 
@@ -49,4 +50,6 @@ let main = ()
 
     | `Fail er -> Printf.eprintf "%s" er
   with 
-  | Invalid_argument _ -> Printf.printf "Usage: rc.byte <name.expr>"
+  | Invalid_argument _ ->
+      Printf.printf "Usage: rc.byte <command> <name.expr>\n";
+      Printf.printf "  <command> should be one of: -i, -s, -o\n"
