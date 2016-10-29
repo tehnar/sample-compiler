@@ -22,7 +22,7 @@ let main = ()
       match Sys.argv.(1) with
       | "-s" -> `SM , Sys.argv.(2)
       | "-o" -> `X86, Sys.argv.(2)
-      | _    -> `Int, Sys.argv.(1)
+      | "-i" -> `Int, Sys.argv.(2)
     in
     match parse filename with
     | `Ok stmt -> 
