@@ -48,7 +48,7 @@ let main = ()
 	     List.iter (fun i -> Printf.printf "%d\n" i) output
 	)
 
-    | `Fail er -> Printf.eprintf "%s" er
+    | `Fail er -> Printf.eprintf "%s\n" er
   with 
   | Invalid_argument _ ->
       Printf.printf "Usage: rc.byte <command> <name.expr>\n";
