@@ -32,9 +32,12 @@ and compile_statement stmt label_num =
       let (if_compiled,   label_num')  = compile_statement if_block (label_num + 1) in
       let (else_compiled, label_num'') = compile_statement else_block label_num' in
       (
-        compile_expr cond @ [S_CONDITIONAL_JMP (Jz, else_label)] @ 
-        if_compiled @ [S_JMP after_if_label; S_LABEL else_label] @
-        else_compiled @ [S_LABEL after_if_label], 
+        compile_expr cond @ 
+        [S_CONDITIONAL_JMP (Jz, else_label)] @ 
+        if_compiled @ 
+        [S_JMP after_if_label; S_LABEL else_label] @
+        else_compiled @ 
+        [S_LABEL after_if_label], 
         label_num''
       )
   | While (cond, block) -> 
@@ -42,8 +45,11 @@ and compile_statement stmt label_num =
       let while_label = Printf.sprintf "while_label%d" label_num in
       let (block_compiled, label_num') = compile_statement block (label_num + 1) in
       (
-        [S_JMP cond_label; S_LABEL while_label] @ block_compiled @ 
-        [S_LABEL cond_label] @ compile_expr cond @ [S_CONDITIONAL_JMP (Jnz, while_label)],
+        [S_JMP cond_label; S_LABEL while_label] @ 
+        block_compiled @ 
+        [S_LABEL cond_label] @ 
+        compile_expr cond @ 
+        [S_CONDITIONAL_JMP (Jnz, while_label)],
         label_num'
       )
   | FunctionDef (func_name, args, body)  -> 

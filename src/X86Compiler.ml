@@ -126,42 +126,37 @@ let conditional_jmp_to_asm = fun op label ->
   | Jnz -> X86Jnz label
 
 let x86_compile_binary_arithm_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
-  fun env stack op ->
-    match stack with
-    | [] | _::[]   -> assert false
-    | x::y::stack' -> 
-      match (x, y) with
-      | (_, RegisterIndex _) -> (y::stack', [op (x, y)])
-      | (_, _)               -> (y::stack', [X86Mov (x, x86eax); 
-                                             X86Mov (y, x86edx); 
-                                             op (x86eax, x86edx); 
-                                             X86Mov (x86edx, y)])
+  fun env stack op -> 
+    let (x, y, stack') = unsafe_pop_two stack in  
+    match (x, y) with
+    | (_, RegisterIndex _) -> (y::stack', [op (x, y)])
+    | (_, _)               -> (y::stack', [X86Mov (x, x86eax); 
+                                           X86Mov (y, x86edx); 
+                                           op (x86eax, x86edx); 
+                                           X86Mov (x86edx, y)])
 
 let x86_compile_binary_logical_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
-    match stack with
-    | [] | _::[]   -> assert false
-    | x::y::stack' -> 
-      let process x x' = [X86Or (Literal 0, x); 
-                          X86Mov (Literal 0, x); 
-                          X86Set (SetNeq, x')] in
-      let process'     = (process x86eax x86al) @ 
-                         (process x86edx x86dl) @ 
-                         [op (x86eax, x86edx)] in
-          (y::stack', [X86Mov (x, x86eax); 
-                       X86Mov (y, x86edx)] @ 
-                       process' @ 
-                       [X86Mov (x86edx, y)]) 
+    let (x, y, stack') = unsafe_pop_two stack in 
+    let process x x' = [X86Or (Literal 0, x); 
+                        X86Mov (Literal 0, x); 
+                        X86Set (SetNeq, x')] in
+    let process'     = (process x86eax x86al) @ 
+                       (process x86edx x86dl) @ 
+                       [op (x86eax, x86edx)] in
+        (y::stack', [X86Mov (x, x86eax); 
+                     X86Mov (y, x86edx)] @ 
+                     process' @ 
+                     [X86Mov (x86edx, y)]) 
 
 let x86_compile_binary_compare_op : x86environment -> operand list -> (operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
-    match stack with
-    | [] | _::[]   -> assert false
-    | x::y::stack' -> (y::stack', [X86Mov (y, x86eax); 
-                                   X86Cmp (x86eax, x); 
-                                   X86Mov (Literal 0, x86eax); 
-                                   op x86al; 
-                                   X86Mov(x86eax, y)])
+    let (x, y, stack') = unsafe_pop_two stack in 
+    (y::stack', [X86Mov (y, x86eax); 
+                 X86Cmp (x86eax, x); 
+                 X86Mov (Literal 0, x86eax); 
+                 op x86al; 
+                 X86Mov(x86eax, y)])
 
 let x86_compile_conditional_jmp: x86environment -> operand list -> x86instr -> (operand list) * (x86instr list) = 
   fun env stack op ->
@@ -178,17 +173,18 @@ let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
        let (stack', x86code) =
          match i with
          | S_READ   -> ([RegisterIndex 0], [X86Call "read"])
+
          | S_WRITE  -> ( 
-             match stack with 
-             | []        -> assert false 
-             | x::stack' ->  
-               match x with
-               | RegisterIndex _ -> ([], [X86Push x; X86Call "write"; X86Pop x])
-               | _               -> ([], [X86Call "write"])
+           let (x, stack') = unsafe_pop_one stack in 
+           match x with
+           | RegisterIndex _ -> ([], [X86Push x; X86Call "write"; X86Pop x])
+           | _               -> ([], [X86Call "write"])
          ) 
+
          | S_PUSH n ->
            let s = allocate env stack in
            (s::stack, [X86Mov (Literal n, s)])
+
          | S_LD x   ->
            env#local x;
            let s = allocate env stack in (
@@ -196,30 +192,33 @@ let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
              | RegisterIndex _ -> (s::stack, [X86Mov (VariableName x, s)])
              | _               -> (s::stack, [X86Mov (VariableName x, x86eax); X86Mov (x86eax, s)])
          )
+
          | S_ST x   -> ( 
            env#local x;
-           match stack with
-           | []        -> assert false
-           | s::stack' -> 
-             match s with
-             | RegisterIndex _ -> (stack', [X86Mov (s, VariableName x)])
-             | _               -> (stack', [X86Mov (s, x86eax); X86Mov (x86eax, VariableName x)])
-           )
-         | S_BINARY_ARITHM_OP Div -> ( 
-             match stack with
-             | [] | _::[]   -> assert false
-             | y::x::stack' -> (y::stack', [X86Mov (x, x86eax); X86Cld; X86Div y; X86Mov (x86eax, y)])
+           let (s, stack') = unsafe_pop_one stack in 
+           match s with
+           | RegisterIndex _ -> (stack', [X86Mov (s, VariableName x)])
+           | _               -> (stack', [X86Mov (s, x86eax); X86Mov (x86eax, VariableName x)])
          )
-         | S_BINARY_ARITHM_OP Mod -> (
-             match stack with
-             | [] | _::[]   -> assert false
-             | y::x::stack' -> (y::stack', [X86Mov (x, x86eax); X86Cld; X86Mod y; X86Mov (x86edx, y)])
-         )
+
+         | S_BINARY_ARITHM_OP Div -> 
+           let (y, x, stack') = unsafe_pop_two stack in 
+           (y::stack', [X86Mov (x, x86eax); X86Cld; X86Div y; X86Mov (x86eax, y)])
+
+         | S_BINARY_ARITHM_OP Mod ->
+           let (y, x, stack') = unsafe_pop_two stack in
+           (y::stack', [X86Mov (x, x86eax); X86Cld; X86Mod y; X86Mov (x86edx, y)])
+
          | S_BINARY_ARITHM_OP  op -> x86_compile_binary_arithm_op  env stack (binary_arithm_op_to_asm op)
+
          | S_BINARY_LOGICAL_OP op -> x86_compile_binary_logical_op env stack (binary_logical_op_to_asm op)
+
          | S_BINARY_COMPARE_OP op -> x86_compile_binary_compare_op env stack (binary_compare_op_to_asm op)
+
          | S_CONDITIONAL_JMP (op, label) -> x86_compile_conditional_jmp env stack (conditional_jmp_to_asm op label)
+
          | S_JMP   label -> (stack, [X86Jmp label])
+
          | S_LABEL label -> (stack, [X86Label label])
        in
        x86code @ x86compile' stack' code'
@@ -261,9 +260,9 @@ let genasm code =
 
   Buffer.contents asm
 
-let build statement name =
+let build code name =
   let outf = open_out (Printf.sprintf "%s.s" name) in
-  Printf.fprintf outf "%s" (genasm statement);
+  Printf.fprintf outf "%s" (genasm code);
   close_out outf;
   let runtime_dir = try
     Sys.getenv "RC_RUNTIME"

@@ -66,4 +66,12 @@ let logical_op_to_fun op = match op with
 | And -> (fun l r -> bool_to_int (int_to_bool l && int_to_bool r))
 | Or  -> (fun l r -> bool_to_int (int_to_bool l || int_to_bool r))
 
+let unsafe_pop_one x = match x with
+| (y::ys) -> (y, ys)
+| _       -> assert false
+
+let unsafe_pop_two x = match x with
+| (y1::y2::ys) -> (y1, y2, ys)
+| _            -> assert false
+
 exception Compilation_Error of string

@@ -12,23 +12,23 @@ let main = ()
     | `Ok stmt -> 
       (match mode with
        | `X86 ->
-                 let basename = Filename.chop_suffix filename ".expr" in 
-           X86Compiler.build stmt basename
+         let basename = Filename.chop_suffix filename ".expr" in 
+         X86Compiler.build stmt basename
        | _ ->
-           let rec read acc =
-             try
-         let r = read_int () in
-         Printf.printf "> ";
-         read (acc @ [r]) 
-                   with End_of_file -> acc
-           in
-           let input = read [] in
-           let output =
-             match mode with
-             | `SM -> StackMachineEmulator.run input (StackMachineCompiler.compile_code stmt)
-             | _   -> Emulator.run input stmt
-           in
-           List.iter (fun i -> Printf.printf "%d\n" i) output
+         let rec read acc =
+           try
+             let r = read_int () in
+             Printf.printf "> ";
+             read (acc @ [r]) 
+           with End_of_file -> acc
+         in
+         let input = read [] in
+         let output =
+           match mode with
+           | `SM -> StackMachineEmulator.run input (StackMachineCompiler.compile_code stmt)
+           | _   -> Emulator.run input stmt
+         in
+         List.iter (fun i -> Printf.printf "%d\n" i) output
       )
     | `Fail er -> Printf.eprintf "%s" er
   with
