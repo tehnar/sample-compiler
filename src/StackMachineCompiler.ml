@@ -4,7 +4,7 @@ let func_name_to_label func_name = Printf.sprintf "func%s" func_name
 
 let rec call_function (func_name, ops) = 
   let compiled_ops = List.map (fun e -> compile_expr e) ops in
-  List.flatten (List.rev compiled_ops) @ [S_CALL func_name_to_label func_name]
+  List.flatten (List.rev compiled_ops) @ [S_CALL (func_name_to_label func_name, List.length ops)]
 
 and compile_expr expr =
   match expr with

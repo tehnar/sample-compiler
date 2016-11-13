@@ -36,7 +36,7 @@ type instr =
   | S_BINARY_ARITHM_OP   of binary_arithm_op
   | S_BINARY_COMPARE_OP  of binary_compare_op
   | S_BINARY_LOGICAL_OP  of binary_logical_op
-  | S_CALL               of string
+  | S_CALL               of string * int
   | S_RET
   | S_DROP
   | S_FUNC_BEGIN of string list

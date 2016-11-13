@@ -1,26 +1,56 @@
 open Data
 
-let x86regs = [|"%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi"|]
-let x86lower_regs = [|"%al"; "%dl"; "%bl"; "%cl"|]
+let x86regs = [|"%esp"; "%eax"; "%edx"; "%ebx"; "%ecx"; "%esi"; "%edi";|]
+let x86lower_regs = [|""; "%al"; "%dl"; "%bl"; "%cl"|]
 
 let num_of_regs = Array.length x86regs
 let num_of_lower_regs = Array.length x86lower_regs
 
 let word_size = 4
 
-type operand = RegisterIndex of int | StackIndex of int | VariableName of string | Literal of int | RegisterLowerIndex of int
+type operand = RegisterIndex of int | StackIndex of int | Literal of int | RegisterLowerIndex of int
 
-let x86eax = RegisterIndex 0
-let x86edx = RegisterIndex 1 
-let x86al  = RegisterLowerIndex 0
-let x86dl  = RegisterLowerIndex 1
+let x86esp = RegisterIndex 0
+let x86eax = RegisterIndex 1
+let x86edx = RegisterIndex 2 
+let x86ecx = RegisterIndex 4 
+let x86al  = RegisterLowerIndex 1
+let x86dl  = RegisterLowerIndex 2
+
+let volatile_regs = [x86eax; x86edx; x86ecx]
+let non_volatile_regs = [RegisterIndex 3; RegisterIndex 5; RegisterIndex 6]
 
 let allocate env stack =
   match stack with
-  | []                                          -> RegisterIndex 2
-  | (StackIndex n)::_                           -> env#allocate (n+1); StackIndex (n+1)
+  | []                                          -> RegisterIndex 3
+  | (StackIndex n)::_                           -> let i = (max n env#local_vars_count) + 1 in
+                                                   env#allocate i; StackIndex i
   | (RegisterIndex n)::_ when n < num_of_regs-1 -> RegisterIndex (n+1)
-  | _                                           -> env#allocate 0; StackIndex 0
+  | _                                           -> let i = env#local_vars_count + 1 in
+                                                   env#allocate i; StackIndex i
+module Map = Map.Make (String)
+
+class x86environment =
+  object(self)
+    val    args_count       = ref 0
+    val    local_vars_count = ref 0
+    val    local_vars       = ref Map.empty
+    method local x          = if not (Map.mem x !local_vars) then (
+                                local_vars_count := !local_vars_count + 1;
+                                local_vars := Map.add x !local_vars_count !local_vars;
+                                self#allocate !local_vars_count
+    )
+    method local_arg x      = args_count := !args_count + 1;
+                              local_vars := Map.add x (-(!args_count) - 1) !local_vars
+    method local_addr x     = StackIndex (Map.find x !local_vars)
+    method local_vars_count = !local_vars_count
+    (*method local_vars       = Map.elements !local_vars*)
+
+    val    allocated  = ref 0
+    method allocate n = allocated := max n !allocated
+    method allocated  = !allocated
+  end
+
 
 type setsuffix = SetLe | SetLeq | SetGe | SetGeq | SetEq | SetNeq
 type x86instr =
@@ -45,24 +75,11 @@ type x86instr =
   | X86Cld    
   | X86Call      of string
   | X86Label     of string
-
-module S = Set.Make (String)
-
-class x86environment =
-  object(self)
-    val    local_vars = ref S.empty
-    method local x    = local_vars := S.add x !local_vars
-    method local_vars = S.elements !local_vars
-
-    val    allocated  = ref 0
-    method allocate n = allocated := max n !allocated
-    method allocated  = !allocated
-  end
+  | X86Prologue  of x86environment
 
 let slot : operand -> string = function
   | (RegisterIndex i) -> x86regs.(i)
-  | (StackIndex i) -> Printf.sprintf "-%d(%%ebp)" (i * word_size)
-  | (VariableName x) -> x
+  | (StackIndex i) -> Printf.sprintf "%d(%%ebp)" (-i * word_size)
   | (Literal i) -> Printf.sprintf "$%d" i
   | (RegisterLowerIndex i) -> x86lower_regs.(i)
 
@@ -75,7 +92,32 @@ let suf_to_str suf =
   | SetEq  -> "e"
   | SetNeq -> "ne"
 
-let x86print : x86instr -> string = function
+
+let push_regs stack regs = match stack with 
+| [] -> []
+| (s::_) -> 
+  let push = fun reg -> X86Push reg in
+  match s with 
+  | StackIndex _    -> List.map push regs
+  | RegisterIndex i -> List.map push @@ List.filter (fun reg -> List.mem reg stack) regs
+  | _               -> assert false
+
+let pop_regs stack regs = match stack with 
+| [] -> []
+| (s::_) -> 
+  let pop = fun reg -> X86Pop reg in
+  match s with 
+  | StackIndex _    -> List.rev_map pop regs
+  | RegisterIndex i -> List.rev_map pop @@ List.filter (fun reg -> List.mem reg stack) regs
+  | _               -> assert false
+
+let rec x86print : x86instr -> string = function instr ->
+  let get_prologue env = 
+    String.concat "\n" ["\tpushl\t%ebp";
+                   "\tmovl\t%esp,\t%ebp";
+                   Printf.sprintf "\tsubl\t$%d,\t%%esp" (env#allocated * word_size);
+                   String.concat "\n" @@ List.map x86print (push_regs [StackIndex 0] non_volatile_regs)] 
+  in match instr with
   | X86Add  (s1, s2)    -> Printf.sprintf "\taddl\t%s,\t%s"  (slot s1) (slot s2)
   | X86Sub  (s1, s2)    -> Printf.sprintf "\tsubl\t%s,\t%s"  (slot s1) (slot s2)
   | X86Mul  (s1, s2)    -> Printf.sprintf "\timull\t%s,\t%s" (slot s1) (slot s2)
@@ -83,21 +125,25 @@ let x86print : x86instr -> string = function
   | X86Xor  (s1, s2)    -> Printf.sprintf "\txorl\t%s,\t%s"  (slot s1) (slot s2)
   | X86And  (s1, s2)    -> Printf.sprintf "\tandl\t%s,\t%s"  (slot s1) (slot s2)
   | X86Or   (s1, s2)    -> Printf.sprintf "\torl\t%s,\t%s"   (slot s1) (slot s2)
-  | X86Test (s1, s2)    -> Printf.sprintf "\ttest\t%s,\t%s"   (slot s1) (slot s2)
+  | X86Test (s1, s2)    -> Printf.sprintf "\ttest\t%s,\t%s"  (slot s1) (slot s2)
   | X86Push  s          -> Printf.sprintf "\tpushl\t%s"      (slot s )
   | X86Pop   s          -> Printf.sprintf "\tpopl\t%s"       (slot s )
   | X86Div   s          -> Printf.sprintf "\tidivl\t%s"      (slot s )
   | X86Mod   s          -> Printf.sprintf "\tidivl\t%s"      (slot s )
   | X86Cmp  (s1, s2)    -> Printf.sprintf "\tcmpl\t%s,\t%s"  (slot s2) (slot s1) (*Not an error, that's GAS syntax: cmp arg2, arg1 *)
-  | X86Set  (suf, s)    -> Printf.sprintf "\tset%s\t%s"     (suf_to_str suf) (slot s)
+  | X86Set  (suf, s)    -> Printf.sprintf "\tset%s\t%s"      (suf_to_str suf) (slot s)
   | X86Jz    s          -> Printf.sprintf "\tjz\t%s"          s
-  | X86Jnz   s          -> Printf.sprintf "\tjnz\t%s"          s
+  | X86Jnz   s          -> Printf.sprintf "\tjnz\t%s"         s
   | X86Jmp   s          -> Printf.sprintf "\tjmp\t%s"         s
-  | X86Ret              -> "\tret"
-  | X86Call  s          -> Printf.sprintf "\tcall\t%s" s
-  | X86Label s          -> Printf.sprintf "%s:" s
+  | X86Ret              -> Printf.sprintf "\tmovl\t%%ebp,\t%%esp\n\tpopl\t%%ebp\n\tret"
+  | X86Call  s          -> Printf.sprintf "\tcall\t%s"        s
+  | X86Label s          -> Printf.sprintf "%s:"               s
   | X86Cld              -> Printf.sprintf "\tcdq"
+  | X86Prologue env     -> get_prologue env
 
+
+
+let func_epilogue_label func_name = Printf.sprintf "__func_%s_end" func_name
 
 let binary_arithm_op_to_asm = fun op -> 
   match op with
@@ -165,21 +211,37 @@ let x86_compile_conditional_jmp: x86environment -> operand list -> x86instr -> (
     | (RegisterIndex x)::stack' -> (stack', [X86Test (RegisterIndex x, RegisterIndex x); op])
     | x::stack'                 -> (stack', [X86Mov (x, x86eax); X86Test(x86eax, x86eax); op])
 
-let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
+let x86_compile_call: x86environment -> operand list -> string -> int -> (operand list) * (x86instr list) =
+  let rec take n x = if n == 0 then ([], x) else 
+    match x with
+    | []    -> assert false
+    | x::xs -> let (y, ys) = take (n - 1) xs in (x::y, ys)
+  in
+  fun env stack label arg_cnt -> 
+    let (args, stack') = take arg_cnt stack in
+    let pushes         = List.map (fun op -> X86Push op) args in
+    let s              = allocate env stack' in
+    (s::stack', push_regs stack' volatile_regs @ 
+               pushes @
+               [X86Call label] @
+               [X86Add (Literal (word_size * arg_cnt), x86esp);
+                X86Mov (x86eax, s)] @
+               pop_regs stack' volatile_regs)
+
+let x86compile : string -> x86environment -> instr list -> x86instr list = fun func_name env code ->
   let rec x86compile' stack code =
     match code with
     | []       -> []
     | i::code' ->
        let (stack', x86code) =
          match i with
-         | S_READ   -> ([RegisterIndex 0], [X86Call "read"])
+         | S_READ   -> ([x86eax], [X86Call "read"])
 
-         | S_WRITE  -> ( 
+         | S_WRITE  -> 
            let (x, stack') = unsafe_pop_one stack in 
-           match x with
-           | RegisterIndex _ -> ([], [X86Push x; X86Call "write"; X86Pop x])
-           | _               -> ([], [X86Call "write"])
-         ) 
+           ([], [X86Push x; X86Call "write"; X86Pop x])
+
+         | S_FUNC_BEGIN args -> List.iter (fun arg -> env#local_arg arg) (List.rev args); ([], [X86Prologue env])
 
          | S_PUSH n ->
            let s = allocate env stack in
@@ -187,19 +249,20 @@ let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
 
          | S_LD x   ->
            env#local x;
-           let s = allocate env stack in (
-             match s with
-             | RegisterIndex _ -> (s::stack, [X86Mov (VariableName x, s)])
-             | _               -> (s::stack, [X86Mov (VariableName x, x86eax); X86Mov (x86eax, s)])
-         )
+           let s = allocate env stack in ( 
+           match s with 
+           | RegisterIndex _ -> (s::stack, [X86Mov (env#local_addr x, s)])
+           | _               -> (s::stack, [X86Mov (env#local_addr x, x86eax); X86Mov (x86eax, s)])           
+           )
 
-         | S_ST x   -> ( 
+         | S_ST x   ->  
            env#local x;
-           let (s, stack') = unsafe_pop_one stack in 
+           let (s, stack') = unsafe_pop_one stack in (
            match s with
-           | RegisterIndex _ -> (stack', [X86Mov (s, VariableName x)])
-           | _               -> (stack', [X86Mov (s, x86eax); X86Mov (x86eax, VariableName x)])
-         )
+           | RegisterIndex _ -> (stack', [X86Mov (s, env#local_addr x)])
+           | _               -> (stack', [X86Mov (s, x86eax); X86Mov (x86eax, env#local_addr x)])
+           )
+
 
          | S_BINARY_ARITHM_OP Div -> 
            let (y, x, stack') = unsafe_pop_two stack in 
@@ -217,52 +280,68 @@ let x86compile : x86environment -> instr list -> x86instr list = fun env code ->
 
          | S_CONDITIONAL_JMP (op, label) -> x86_compile_conditional_jmp env stack (conditional_jmp_to_asm op label)
 
-         | S_JMP   label -> (stack, [X86Jmp label])
+         | S_CALL (label, arg_cnt) -> x86_compile_call env stack label arg_cnt
 
-         | S_LABEL label -> (stack, [X86Label label])
+         | S_JMP   label           -> (stack, [X86Jmp label])
+
+         | S_LABEL label           -> (stack, [X86Label label])
+
+         | S_RET                   -> let (x, stack') = unsafe_pop_one stack in
+                                      (stack', [X86Mov (x, x86eax); X86Jmp (func_epilogue_label func_name)])
+         | S_DROP                  -> let (x, stack') = unsafe_pop_one stack in
+                                      (stack', [])
+         | S_END                   -> (stack, []) (* TODO *)
+
+         | S_FUNC_END              -> (stack, []) 
        in
        x86code @ x86compile' stack' code'
   in
   x86compile' [] code
 
-let genasm code =
+let rec split_to_funcs_and_main stmt = match stmt with
+| FunctionDef (name, _, _) -> ([(name, stmt)], [])
+| Seq (l, r)    -> 
+    let (funcs',  main')  = split_to_funcs_and_main l in
+    let (funcs'', main'') = split_to_funcs_and_main r in
+    (funcs' @ funcs'', main' @ main'')
+| _             -> ([], [stmt])
+
+let genasm func func_name =
   let env = new x86environment in
-  let code' = x86compile env @@ StackMachineCompiler.compile_code code in
+  let code = x86compile func_name env @@ StackMachineCompiler.compile_code func in
   let asm = Buffer.create 1024 in
   let (!!) s = Buffer.add_string asm s in
   let (!)  s = !!s; !!"\n" in
 
-  !"\t.text";
-  List.iter (fun x ->
-      !(Printf.sprintf "\t.comm\t%s,\t%d,\t%d" x word_size word_size))
-    env#local_vars;
-  !"\t.globl\tmain";
-  let prologue, epilogue =
-    if env#allocated = 0
-    then (fun () -> ()), (fun () -> ())
-    else
+  let epilogue =
       (fun () ->
-         !"\tpushl\t%ebp";
-         !"\tmovl\t%esp,\t%ebp";
-         !(Printf.sprintf "\tsubl\t$%d,\t%%esp" (env#allocated * word_size))
-      ),
-      (fun () ->
+         !(x86print (X86Label (func_epilogue_label func_name)));
+         List.iter (fun i -> !(x86print i)) @@ pop_regs [StackIndex 0] non_volatile_regs;
          !"\tmovl\t%ebp,\t%esp";
-         !"\tpopl\t%ebp"
+         !"\tpopl\t%ebp";
+         if func_name = "main" then !"\txorl\t%eax,\t%eax";
+         !"\tret"
       )
   in
-  !"main:";
-  prologue();
-  List.iter (fun i -> !(x86print i)) code';
+  if func_name = "main" then (
+    !"main:"; 
+    !(x86print @@ X86Prologue env);
+  );
+  List.iter (fun i -> !(x86print i)) code;
+
   epilogue();
-  !"\txorl\t%eax,\t%eax";
-  !"\tret";
 
   Buffer.contents asm
 
 let build code name =
   let outf = open_out (Printf.sprintf "%s.s" name) in
-  Printf.fprintf outf "%s" (genasm code);
+  let funcs, main = split_to_funcs_and_main code in
+  let seq_main = List.fold_right (fun l r -> Seq (l, r)) main Skip in
+  let compiled_funcs = List.map (fun (func_name, func) -> genasm func func_name) funcs in
+  let compiled_main = genasm seq_main "main" in
+  Printf.fprintf outf "\t.globl\tmain\n";
+  List.iter (fun asm -> Printf.fprintf outf "%s\n" asm) compiled_funcs;
+  Printf.fprintf outf "main:\n%s" compiled_main;
   close_out outf;
   let runtime_dir = try
     Sys.getenv "RC_RUNTIME"

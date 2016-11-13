@@ -5,6 +5,7 @@ regression/*.log
 *.swp
 *.swo
 *.o
+regression/hand-test???
 regression/test???
 regression/expressions/generated?????
 *.cm?

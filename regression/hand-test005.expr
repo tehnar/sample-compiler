@@ -1,0 +1,18 @@
+g(x, y, z, t) begin
+    write(x); write(y); write(z); write(t);
+    if t == 0 then
+        f(4, 5, 6, 7);
+    fi;
+    return 0;
+end
+
+f (a, b, c, d) begin
+    g(d, a, c, b);
+    g(d, c, b, a);
+    return 0;
+end
+
+f(0, 1, 2, 3);
+f(3, 2, 1, 0);
+
+
