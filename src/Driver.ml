@@ -6,7 +6,6 @@ let main = ()
       | "-o" -> `X86, Sys.argv.(2)
       | "-i" -> `Int, Sys.argv.(2)
       | _    -> `Int, Sys.argv.(1)
-      
     in
     match Parser.parse filename with
     | `Ok stmt -> 

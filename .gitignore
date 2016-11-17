@@ -11,3 +11,6 @@ regression/expressions/generated?????
 *.cm?
 regression/expressions/*.log
 !regression/expressions/orig/*.log
+_build
+*.byte
+*.native
