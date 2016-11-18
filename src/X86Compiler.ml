@@ -8,7 +8,7 @@ let num_of_lower_regs = Array.length x86lower_regs
 
 let word_size = 4
 
-type operand = RegisterIndex of int | StackIndex of int | Literal of int | RegisterLowerIndex of int
+type operand = RegisterIndex of int | StackIndex of int | Literal of Value.t | RegisterLowerIndex of int
 
 let x86esp = RegisterIndex 0
 let x86eax = RegisterIndex 1
@@ -80,7 +80,7 @@ type x86instr =
 let slot : operand -> string = function
   | (RegisterIndex i) -> x86regs.(i)
   | (StackIndex i) -> Printf.sprintf "%d(%%ebp)" (-i * word_size)
-  | (Literal i) -> Printf.sprintf "$%d" i
+  | (Literal i) -> Printf.sprintf "$%s" (Value.convert_to_string i)
   | (RegisterLowerIndex i) -> x86lower_regs.(i)
 
 let suf_to_str suf = 
@@ -173,7 +173,7 @@ let conditional_jmp_to_asm = fun op label ->
 
 let x86_compile_binary_arithm_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op -> 
-    let (x, y, stack') = unsafe_pop_two stack in  
+    let (x, y, stack') = Util.unsafe_pop_two stack in  
     match (x, y) with
     | (_, RegisterIndex _) -> (y::stack', [op (x, y)])
     | (_, _)               -> (y::stack', [X86Mov (x, x86eax); 
@@ -183,9 +183,9 @@ let x86_compile_binary_arithm_op : x86environment -> operand list -> (operand * 
 
 let x86_compile_binary_logical_op : x86environment -> operand list -> (operand * operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
-    let (x, y, stack') = unsafe_pop_two stack in 
-    let process x x' = [X86Or (Literal 0, x); 
-                        X86Mov (Literal 0, x); 
+    let (x, y, stack') = Util.unsafe_pop_two stack in 
+    let process x x' = [X86Or (Literal (Value.Int 0), x); 
+                        X86Mov (Literal (Value.Int 0), x); 
                         X86Set (SetNeq, x')] in
     let process'     = (process x86eax x86al) @ 
                        (process x86edx x86dl) @ 
@@ -197,10 +197,10 @@ let x86_compile_binary_logical_op : x86environment -> operand list -> (operand *
 
 let x86_compile_binary_compare_op : x86environment -> operand list -> (operand -> x86instr) -> (operand list) * (x86instr list) = 
   fun env stack op ->
-    let (x, y, stack') = unsafe_pop_two stack in 
+    let (x, y, stack') = Util.unsafe_pop_two stack in 
     (y::stack', [X86Mov (y, x86eax); 
                  X86Cmp (x86eax, x); 
-                 X86Mov (Literal 0, x86eax); 
+                 X86Mov (Literal (Value.Int 0), x86eax); 
                  op x86al; 
                  X86Mov(x86eax, y)])
 
@@ -212,19 +212,14 @@ let x86_compile_conditional_jmp: x86environment -> operand list -> x86instr -> (
     | x::stack'                 -> (stack', [X86Mov (x, x86eax); X86Test(x86eax, x86eax); op])
 
 let x86_compile_call: x86environment -> operand list -> string -> int -> (operand list) * (x86instr list) =
-  let rec take n x = if n == 0 then ([], x) else 
-    match x with
-    | []    -> assert false
-    | x::xs -> let (y, ys) = take (n - 1) xs in (x::y, ys)
-  in
   fun env stack label arg_cnt -> 
-    let (args, stack') = take arg_cnt stack in
+    let (args, stack') = Util.unsafe_pop_many arg_cnt stack in
     let pushes         = List.map (fun op -> X86Push op) args in
     let s              = allocate env stack' in
     (s::stack', push_regs stack' volatile_regs @ 
                pushes @
                [X86Call label] @
-               [X86Add (Literal (word_size * arg_cnt), x86esp);
+               [X86Add (Literal (Value.Int (word_size * arg_cnt)), x86esp);
                 X86Mov (x86eax, s)] @
                pop_regs stack' volatile_regs)
 
@@ -235,12 +230,6 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
     | i::code' ->
        let (stack', x86code) =
          match i with
-         | S_READ   -> ([x86eax], [X86Call "read"])
-
-         | S_WRITE  -> 
-           let (x, stack') = unsafe_pop_one stack in 
-           ([], [X86Push x; X86Call "write"; X86Pop x])
-
          | S_FUNC_BEGIN args -> List.iter (fun arg -> env#local_arg arg) (List.rev args); ([], [X86Prologue env])
 
          | S_PUSH n ->
@@ -257,7 +246,7 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
 
          | S_ST x   ->  
            env#local x;
-           let (s, stack') = unsafe_pop_one stack in (
+           let (s, stack') = Util.unsafe_pop_one stack in (
            match s with
            | RegisterIndex _ -> (stack', [X86Mov (s, env#local_addr x)])
            | _               -> (stack', [X86Mov (s, x86eax); X86Mov (x86eax, env#local_addr x)])
@@ -265,11 +254,11 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
 
 
          | S_BINARY_ARITHM_OP Div -> 
-           let (y, x, stack') = unsafe_pop_two stack in 
+           let (y, x, stack') = Util.unsafe_pop_two stack in 
            (y::stack', [X86Mov (x, x86eax); X86Cld; X86Div y; X86Mov (x86eax, y)])
 
          | S_BINARY_ARITHM_OP Mod ->
-           let (y, x, stack') = unsafe_pop_two stack in
+           let (y, x, stack') = Util.unsafe_pop_two stack in
            (y::stack', [X86Mov (x, x86eax); X86Cld; X86Mod y; X86Mov (x86edx, y)])
 
          | S_BINARY_ARITHM_OP  op -> x86_compile_binary_arithm_op  env stack (binary_arithm_op_to_asm op)
@@ -282,13 +271,15 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
 
          | S_CALL (label, arg_cnt) -> x86_compile_call env stack label arg_cnt
 
+         | S_BUILTIN (builtin_name, arg_cnt) -> x86_compile_call env stack builtin_name arg_cnt
+
          | S_JMP   label           -> (stack, [X86Jmp label])
 
          | S_LABEL label           -> (stack, [X86Label label])
 
-         | S_RET                   -> let (x, stack') = unsafe_pop_one stack in
+         | S_RET                   -> let (x, stack') = Util.unsafe_pop_one stack in
                                       (stack', [X86Mov (x, x86eax); X86Jmp (func_epilogue_label func_name)])
-         | S_DROP                  -> let (x, stack') = unsafe_pop_one stack in
+         | S_DROP                  -> let (x, stack') = Util.unsafe_pop_one stack in
                                       (stack', [])
          | S_END                   -> (stack, []) (* TODO *)
 

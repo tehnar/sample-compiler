@@ -1,4 +1,4 @@
-fun printStr (S)
+printStr (S)
 begin
   for i := 0, i < strlen (S), i := i+1
   do

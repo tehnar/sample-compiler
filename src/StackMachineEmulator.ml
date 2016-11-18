@@ -2,10 +2,11 @@ module Map = Map.Make (String)
 
 open Data
 
-let run : int list -> (int -> int -> int) -> int list = fun stack op -> 
-  match stack with
-  | [] | _::[]   -> assert false
-  | y::x::stack' -> (op x y)::stack'
+let apply_binop: Value.t list -> (int -> int -> int) -> Value.t list = fun stack op -> 
+  let (y, x, stack') = Util.unsafe_pop_two stack in
+  match (x, y) with
+  | (Value.Int x', Value.Int y') -> (Value.Int (op x' y'))::stack'
+  | _                            -> failwith "Binops are supported only for ints"
 
 let find_label code label = 
   let indexed_code = List.mapi (fun x y -> (x, y)) code in
@@ -15,13 +16,13 @@ let find_label code label =
   | _              -> false) indexed_code
   in match positions with
   | [(x, y)] -> x
-  | []  -> raise (Compilation_Error (Printf.sprintf "No label %s found" label))
-  | _   -> raise (Compilation_Error (Printf.sprintf "%d labels '%s' found instead of one" (List.length positions) label))
+  | []  -> failwith (Printf.sprintf "No label %s found" label)
+  | _   -> failwith (Printf.sprintf "%d labels '%s' found instead of one" (List.length positions) label)
 
 let check_jmp_condition jmp x = 
   match jmp with 
-  | Jz  -> x = 0
-  | Jnz -> x <> 0
+  | Jz  -> x =  Value.Int 0
+  | Jnz -> x <> Value.Int 0
 
 let run code =
   let code_list = code in
@@ -30,32 +31,23 @@ let run code =
     else let instr = code.(instruction_pointer) in
        run'
          (match instr with
-          | S_READ   -> 
-            Printf.printf "> ";
-            let y = read_int() in
-            (state, y::stack, stack_frames, instruction_pointer + 1)
-
-          | S_WRITE  -> let (y, stack') = unsafe_pop_one stack in
-            Printf.printf "%d\n" y;
-            (state, stack', stack_frames, instruction_pointer + 1)
-
           | S_PUSH n -> (state, n::stack, stack_frames, instruction_pointer + 1)
 
           | S_LD x   -> (state, (Map.find x state)::stack, stack_frames, instruction_pointer + 1)
 
-          | S_ST x   -> let (y, stack') = unsafe_pop_one stack in
+          | S_ST x   -> let (y, stack') = Util.unsafe_pop_one stack in
             (Map.add x y state, stack', stack_frames, instruction_pointer + 1)
 
           | S_BINARY_ARITHM_OP  op -> 
-            (state, run stack (fun x y -> binary_op_to_fun  op x y), stack_frames, instruction_pointer + 1)
+            (state, apply_binop stack (fun x y -> Ops.binary_op_to_fun  op x y), stack_frames, instruction_pointer + 1)
 
           | S_BINARY_COMPARE_OP op -> 
-            (state, run stack (fun x y -> compare_op_to_fun op x y), stack_frames, instruction_pointer + 1)
+            (state, apply_binop stack (fun x y -> Ops.compare_op_to_fun op x y), stack_frames, instruction_pointer + 1)
 
           | S_BINARY_LOGICAL_OP op -> 
-            (state, run stack (fun x y -> logical_op_to_fun op x y), stack_frames, instruction_pointer + 1)
+            (state, apply_binop stack (fun x y -> Ops.logical_op_to_fun op x y), stack_frames, instruction_pointer + 1)
 
-          | S_CONDITIONAL_JMP (op, label) -> let (y, stack') = unsafe_pop_one stack in 
+          | S_CONDITIONAL_JMP (op, label) -> let (y, stack') = Util.unsafe_pop_one stack in 
             if check_jmp_condition op y then (state, stack', stack_frames, find_label code_list label)
                                         else (state, stack', stack_frames, instruction_pointer + 1)
 
@@ -63,19 +55,29 @@ let run code =
 
           | S_LABEL _         -> (state, stack, stack_frames, instruction_pointer + 1)
 
-          | S_FUNC_BEGIN args -> let (ret_addr, stack') = unsafe_pop_one stack in  
-            let fold_arg = fun (state, stack) arg -> let (x, stack') = unsafe_pop_one stack in (Map.add arg x state, stack')
+          | S_FUNC_BEGIN args -> 
+            let (ret_addr, stack') = Util.unsafe_pop_one stack in  
+            let fold_arg = fun state (arg_name, arg_val) -> Map.add arg_name arg_val state
             in
-            let (state', stack'') = List.fold_left fold_arg (Map.empty, stack') args in
+            let (arg_vals, stack'') = Util.unsafe_pop_many (List.length args) stack' in
+            let state' = List.fold_left fold_arg Map.empty (List.combine args arg_vals) in
             (state', ret_addr::stack'', stack_frames, instruction_pointer + 1) 
 
-          | S_CALL (label, _) -> (Map.empty, (instruction_pointer+1)::stack,  state::stack_frames, find_label code_list label)
+          | S_CALL (label, _) -> (Map.empty, (Value.Int (instruction_pointer+1))::stack,  state::stack_frames, find_label code_list label)
 
-          | S_RET             -> let (x, y, stack') = unsafe_pop_two stack in
-                                 let (state', stack_frames') = unsafe_pop_one stack_frames in
-                                 (state', x::stack', stack_frames', y)
+          | S_BUILTIN (func_name, arg_cnt) -> 
+              let (args, stack') = Util.unsafe_pop_many arg_cnt stack in 
+              (state, (Builtins.get_builtin func_name args)::stack', stack_frames, instruction_pointer + 1) 
 
-          | S_DROP            -> let (x, stack') = unsafe_pop_one stack in 
+          | S_RET             -> let (x, y, stack') = Util.unsafe_pop_two stack in
+                                 let (state', stack_frames') = Util.unsafe_pop_one stack_frames in (
+                                 match y with 
+                                 | Value.Int y' -> (state', x::stack', stack_frames', y')
+                                 | _            -> failwith "Expected int at the top of the stack as return address"
+                                 )
+                                 
+
+          | S_DROP            -> let (x, stack') = Util.unsafe_pop_one stack in 
                                  (state, stack', stack_frames, instruction_pointer + 1)
 
           | S_FUNC_END        -> (state, stack,  stack_frames, instruction_pointer + 1)

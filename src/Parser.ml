@@ -42,9 +42,11 @@ ostap (
   | primary;
 
   primary:
-    c:DECIMAL      { Const c }
+    c:DECIMAL  { Const (Value.Int c) }
+  | s:STRING   { Const (Value.of_string (String.sub s 1 (String.length s - 2))) }
+  | c:CHAR     { Const (Value.Int (Char.code c)) }
   | x:function_call { x }
-  | x:IDENT        { Var   x }
+  | x:IDENT         { Var   x }
   | -"(" expr -")";
 
   stmt:
@@ -60,11 +62,9 @@ ostap (
         (match els with None -> Skip | Some x -> x)
       )
     }
-  | %"repeat" s:stmt %"until" e:expr {Seq (s, While (BinaryCompareExpr (Eq, e, Const 0), s))}
+  | %"repeat" s:stmt %"until" e:expr {Seq (s, While (BinaryCompareExpr (Eq, e, Const (Value.Int 0)), s))}
   | %"while" e:expr %"do" s:stmt %"od" {While (e, s)}
   | %"for" s1:stmt "," e:expr "," s2:stmt %"do" s:stmt %"od" {Seq(s1, While (e, Seq(s, s2)))}
-  | %"read"  "(" name:IDENT ")" { Read name       }
-  | %"write" "(" e:expr     ")" { Write e         }
   | %"skip"                     { Skip            }
   | %"return" e:expr            { Return e        }
   | x:IDENT ":=" e:expr         { Assign (x , e)  }
@@ -86,8 +86,10 @@ let parse infile =
   Util.parse
     (object
        inherit Matcher.t s
-       inherit Util.Lexers.ident ["read"; "write"; "skip"] s
+       inherit Util.Lexers.ident ["skip"] s
        inherit Util.Lexers.decimal s
+       inherit Util.Lexers.string s
+       inherit Util.Lexers.char s
        inherit Util.Lexers.skip [
 	 Matcher.Skip.whitespaces " \t\n";
 	 Matcher.Skip.lineComment "--";

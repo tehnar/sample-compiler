@@ -4,7 +4,11 @@ let func_name_to_label func_name = Printf.sprintf "func%s" func_name
 
 let rec call_function (func_name, ops) = 
   let compiled_ops = List.map (fun e -> compile_expr e) ops in
-  List.flatten (List.rev compiled_ops) @ [S_CALL (func_name_to_label func_name, List.length ops)]
+  let call_stmt = if Builtins.is_builtin func_name 
+  then [S_BUILTIN (func_name, List.length ops)]
+  else [S_CALL    (func_name_to_label func_name, List.length ops)]
+  in
+  List.flatten (List.rev compiled_ops) @ call_stmt 
 
 and compile_expr expr =
   match expr with
@@ -18,9 +22,9 @@ and compile_expr expr =
 and compile_statement stmt label_num =
   match stmt with
   | Skip          -> ([], label_num)
+
   | Assign (x, e) -> (compile_expr e @ [S_ST x], label_num)
-  | Read    x     -> ([S_READ; S_ST x], label_num)
-  | Write   e     -> (compile_expr e @ [S_WRITE], label_num)
+
   | Seq    (l, r) -> 
       let (l_compiled, label_num')  = compile_statement l label_num  in
       let (r_compiled, label_num'') = compile_statement r label_num' in
@@ -40,6 +44,7 @@ and compile_statement stmt label_num =
         [S_LABEL after_if_label], 
         label_num''
       )
+
   | While (cond, block) -> 
       let cond_label = Printf.sprintf "while_cond%d" label_num in
       let while_label = Printf.sprintf "while_label%d" label_num in
@@ -59,6 +64,7 @@ and compile_statement stmt label_num =
       (lbl::beg::body' @ [S_FUNC_END], label_num')
 
   | FunctionCallStatement (x, y) -> (call_function (x, y) @ [S_DROP], label_num)
+
   | Return e -> (compile_expr e @ [S_RET], label_num)
  
 let compile_code code = 
