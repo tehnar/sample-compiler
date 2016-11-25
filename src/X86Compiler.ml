@@ -77,10 +77,22 @@ type x86instr =
   | X86Label     of string
   | X86Prologue  of x86environment
 
+let get_hash s = 
+  let rec get_hash' s i = 
+    if i = String.length s then 0
+                           else Char.code s.[i] + 239 * get_hash' s (i + 1)
+  in 
+  let hash = get_hash' s 0 in
+  if hash < 0 then -hash
+              else hash
+
+let string_to_label s = Printf.sprintf "str_const_%d" @@ get_hash s
+
 let slot : operand -> string = function
   | (RegisterIndex i) -> x86regs.(i)
   | (StackIndex i) -> Printf.sprintf "%d(%%ebp)" (-i * word_size)
-  | (Literal i) -> Printf.sprintf "$%s" (Value.convert_to_string i)
+  | (Literal (Value.Int i))    -> Printf.sprintf "$%d" i
+  | (Literal (Value.String s)) -> Printf.sprintf "$%s" (string_to_label s)
   | (RegisterLowerIndex i) -> x86lower_regs.(i)
 
 let suf_to_str suf = 
@@ -214,7 +226,7 @@ let x86_compile_conditional_jmp: x86environment -> operand list -> x86instr -> (
 let x86_compile_call: x86environment -> operand list -> string -> int -> (operand list) * (x86instr list) =
   fun env stack label arg_cnt -> 
     let (args, stack') = Util.unsafe_pop_many arg_cnt stack in
-    let pushes         = List.map (fun op -> X86Push op) args in
+    let pushes         = List.rev_map (fun op -> X86Push op) args in
     let s              = allocate env stack' in
     (s::stack', push_regs stack' volatile_regs @ 
                pushes @
@@ -230,7 +242,7 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
     | i::code' ->
        let (stack', x86code) =
          match i with
-         | S_FUNC_BEGIN args -> List.iter (fun arg -> env#local_arg arg) (List.rev args); ([], [X86Prologue env])
+         | S_FUNC_BEGIN args -> List.iter (fun arg -> env#local_arg arg) args; ([], [X86Prologue env])
 
          | S_PUSH n ->
            let s = allocate env stack in
@@ -297,6 +309,11 @@ let rec split_to_funcs_and_main stmt = match stmt with
     (funcs' @ funcs'', main' @ main'')
 | _             -> ([], [stmt])
 
+let rec get_string_constants = function
+  | [] -> []
+  | S_PUSH (Value.String x)::xs -> (Bytes.to_string x)::(get_string_constants xs)
+  | _::xs -> get_string_constants xs
+
 let genasm func func_name =
   let env = new x86environment in
   let code = x86compile func_name env @@ StackMachineCompiler.compile_code func in
@@ -330,9 +347,12 @@ let build code name =
   let seq_main = List.fold_right (fun l r -> Seq (l, r)) main Skip in
   let compiled_funcs = List.map (fun (func_name, func) -> genasm func func_name) funcs in
   let compiled_main = genasm seq_main "main" in
-  Printf.fprintf outf "\t.globl\tmain\n";
+  let string_constants = List.sort_uniq String.compare @@ get_string_constants (StackMachineCompiler.compile_code code) in
+  Printf.fprintf outf "\t.data\n";
+  List.iter (fun s -> Printf.fprintf outf "%s:\n\t.int %d\n\t.ascii \"%s\"\n" (string_to_label s) (String.length s) s) string_constants;
+  Printf.fprintf outf "\t.text\n\t.globl\tmain\n";
   List.iter (fun asm -> Printf.fprintf outf "%s\n" asm) compiled_funcs;
-  Printf.fprintf outf "main:\n%s" compiled_main;
+  Printf.fprintf outf "%s" compiled_main;
   close_out outf;
   let runtime_dir = try
     Sys.getenv "RC_RUNTIME"

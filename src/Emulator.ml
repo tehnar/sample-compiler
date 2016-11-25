@@ -1,7 +1,5 @@
 module Map = Map.Make (String)
 
-(* TODO int -> Value.t, refactor state *)
-
 open Data
 type state = (Value.t Map.t) * ((string list * statement)  Map.t)
 

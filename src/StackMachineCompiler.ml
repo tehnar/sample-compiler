@@ -19,22 +19,22 @@ and compile_expr expr =
   | BinaryLogicalExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_LOGICAL_OP op]
   | FunctionCallExpr (x, y) -> call_function (x, y)
 
-and compile_statement stmt label_num =
+and compile_statement stmt label_num cur_func =
   match stmt with
   | Skip          -> ([], label_num)
 
   | Assign (x, e) -> (compile_expr e @ [S_ST x], label_num)
 
   | Seq    (l, r) -> 
-      let (l_compiled, label_num')  = compile_statement l label_num  in
-      let (r_compiled, label_num'') = compile_statement r label_num' in
+      let (l_compiled, label_num')  = compile_statement l label_num  cur_func in
+      let (r_compiled, label_num'') = compile_statement r label_num' cur_func in
       (l_compiled @ r_compiled, label_num'')
 
   | If (cond, if_block, else_block) -> 
-      let else_label     = Printf.sprintf "else%d"     label_num in
-      let after_if_label = Printf.sprintf "after_if%d" label_num in
-      let (if_compiled,   label_num')  = compile_statement if_block (label_num + 1) in
-      let (else_compiled, label_num'') = compile_statement else_block label_num' in
+      let else_label     = Printf.sprintf "else%d%s"     label_num cur_func in
+      let after_if_label = Printf.sprintf "after_if%d%s" label_num cur_func in
+      let (if_compiled,   label_num')  = compile_statement if_block (label_num + 1) cur_func in
+      let (else_compiled, label_num'') = compile_statement else_block label_num'    cur_func in
       (
         compile_expr cond @ 
         [S_CONDITIONAL_JMP (Jz, else_label)] @ 
@@ -46,9 +46,9 @@ and compile_statement stmt label_num =
       )
 
   | While (cond, block) -> 
-      let cond_label = Printf.sprintf "while_cond%d" label_num in
-      let while_label = Printf.sprintf "while_label%d" label_num in
-      let (block_compiled, label_num') = compile_statement block (label_num + 1) in
+      let cond_label  = Printf.sprintf "while_cond%d%s"  label_num cur_func in
+      let while_label = Printf.sprintf "while_label%d%s" label_num cur_func in
+      let (block_compiled, label_num') = compile_statement block (label_num + 1) cur_func in
       (
         [S_JMP cond_label; S_LABEL while_label] @ 
         block_compiled @ 
@@ -60,7 +60,7 @@ and compile_statement stmt label_num =
   | FunctionDef (func_name, args, body)  -> 
       let lbl = S_LABEL (func_name_to_label func_name) in
       let beg = S_FUNC_BEGIN args in  
-      let body', label_num' = compile_statement body label_num in
+      let body', label_num' = compile_statement body label_num func_name in
       (lbl::beg::body' @ [S_FUNC_END], label_num')
 
   | FunctionCallStatement (x, y) -> (call_function (x, y) @ [S_DROP], label_num)
@@ -68,4 +68,4 @@ and compile_statement stmt label_num =
   | Return e -> (compile_expr e @ [S_RET], label_num)
  
 let compile_code code = 
-  let (code, _) = (compile_statement code 0) in code
+  let (code, _) = (compile_statement code 0 "") in code
