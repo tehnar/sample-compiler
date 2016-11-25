@@ -45,6 +45,8 @@ ostap (
     c:DECIMAL  { Const (Value.Int c) }
   | s:STRING   { Const (Value.of_string (String.sub s 1 (String.length s - 2))) }
   | c:CHAR     { Const (Value.Int (Char.code c)) }
+  | "true"     { Const (Value.Int 1) }
+  | "false"    { Const (Value.Int 0) }
   | x:function_call { x }
   | x:IDENT         { Var   x }
   | -"(" expr -")";
