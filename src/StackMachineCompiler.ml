@@ -14,6 +14,8 @@ and compile_expr expr =
   match expr with
   | Var    x     -> [S_LD   x]
   | Const  n     -> [S_PUSH n]
+  | Elem (e, i)  -> compile_expr e @ compile_expr i @ [S_ELEM]
+  | Array (boxed, elems) -> List.concat (List.rev_map compile_expr elems) @ [S_ARRAY (boxed, List.length elems)]
   | BinaryArithmExpr  (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_ARITHM_OP  op]
   | BinaryCompareExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_COMPARE_OP op]
   | BinaryLogicalExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_LOGICAL_OP op]
@@ -24,6 +26,8 @@ and compile_statement stmt label_num cur_func =
   | Skip          -> ([], label_num)
 
   | Assign (x, e) -> (compile_expr e @ [S_ST x], label_num)
+
+  | ArrAssign (a, i, e) -> (compile_expr a @ compile_expr i @ compile_expr e @ [S_STA], label_num)
 
   | Seq    (l, r) -> 
       let (l_compiled, label_num')  = compile_statement l label_num  cur_func in

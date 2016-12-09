@@ -38,6 +38,20 @@ let run code =
           | S_ST x   -> let (y, stack') = Util.unsafe_pop_one stack in
             (Map.add x y state, stack', stack_frames, instruction_pointer + 1)
 
+          | S_ELEM   -> 
+            let (i, a, stack') = Util.unsafe_pop_two stack in
+            let arr = Value.to_array a in
+            (state, arr.(Value.to_int i)::stack', stack_frames, instruction_pointer + 1)
+
+          | S_STA    ->
+            let (e, i, a, stack') = Util.unsafe_pop_three stack in
+            (Value.to_array a).(Value.to_int i) <- e;
+            (state, stack', stack_frames, instruction_pointer + 1)
+
+          | S_ARRAY (boxed, n) -> 
+            let (elems, stack') = Util.unsafe_pop_many n stack in
+            (state, (Value.of_array boxed (Array.of_list elems))::stack', stack_frames, instruction_pointer + 1)
+
           | S_BINARY_ARITHM_OP  op -> 
             (state, apply_binop stack (fun x y -> Ops.binary_op_to_fun  op x y), stack_frames, instruction_pointer + 1)
 

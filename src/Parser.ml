@@ -42,13 +42,16 @@ ostap (
   | primary;
 
   primary:
-    c:DECIMAL  { Const (Value.Int c) }
-  | s:STRING   { Const (Value.of_string (String.sub s 1 (String.length s - 2))) }
-  | c:CHAR     { Const (Value.Int (Char.code c)) }
-  | "true"     { Const (Value.Int 1) }
-  | "false"    { Const (Value.Int 0) }
-  | x:function_call { x }
-  | x:IDENT         { Var   x }
+    "[" elems:args_expr_list "]" { Array (false, elems) }
+  | "{" elems:args_expr_list "}" { Array (true,  elems) }
+  | e:array_expr i:(-"[" expr -"]")+  { List.fold_left (fun a i -> Elem (a, i)) e i }
+  | c:DECIMAL                    { Const (Value.Int c) }
+  | s:STRING                     { Const (Value.of_string (String.sub s 1 (String.length s - 2))) }
+  | c:CHAR                       { Const (Value.Int (Char.code c)) }
+  | "true"                       { Const (Value.Int 1) }
+  | "false"                      { Const (Value.Int 0) }
+  | x:function_call              { x }
+  | x:IDENT                      { Var x }
   | -"(" expr -")";
 
   stmt:
@@ -67,20 +70,37 @@ ostap (
   | %"repeat" s:stmt %"until" e:expr {Seq (s, While (BinaryCompareExpr (Eq, e, Const (Value.Int 0)), s))}
   | %"while" e:expr %"do" s:stmt %"od" {While (e, s)}
   | %"for" s1:stmt "," e:expr "," s2:stmt %"do" s:stmt %"od" {Seq(s1, While (e, Seq(s, s2)))}
-  | %"skip"                     { Skip            }
-  | %"return" e:expr            { Return e        }
-  | x:IDENT ":=" e:expr         { Assign (x , e)  }
+  | %"skip"                               { Skip            }
+  | %"return" e:expr                      { Return e        }
+  | a:array_expr i:(-"[" expr -"]")+ ":=" e:expr { 
+    let rev_i  = List.rev i in
+    let last_i = List.hd rev_i in
+    let i'     = List.rev @@ List.tl rev_i in
+    let a'     = List.fold_left (fun a i -> Elem (a, i)) a i' in
+    ArrAssign (a', last_i, e) 
+  } 
+  | x:IDENT ":=" e:expr                   { Assign (x , e)  }
   | s:function_def        { s }
   | s:function_call { match s with FunctionCallExpr (name, args) -> FunctionCallStatement (name, args) | _ -> assert false }
   | "" {Skip};
 
+  array_expr: 
+    function_call
+  | x:IDENT        {Var x};
+  
   function_def:
-    fun_name:IDENT "(" first_arg:IDENT args:(-"," IDENT)* ")" %"begin" body:stmt %"end" {FunctionDef (fun_name, first_arg::args, body)}
-  | fun_name:IDENT "(" ")" %"begin" body:stmt %"end"                               {FunctionDef (fun_name, [], body)};
+    "fun"? fun_name:IDENT "(" args:args_name_list ")" %"begin" body:stmt %"end" {FunctionDef (fun_name, args, body)};
 
   function_call:
-    fun_name:IDENT "(" first_arg:expr args:(-"," expr)* ")" {FunctionCallExpr (fun_name, first_arg::args)}
-  | fun_name:IDENT "(" ")"                                 {FunctionCallExpr (fun_name, [])}
+    fun_name:IDENT "(" args:args_expr_list ")" {FunctionCallExpr (fun_name, args)};
+
+  args_expr_list:
+    first_arg:expr args:(-"," expr)* { first_arg::args }
+  | ""                               { [] };
+ 
+  args_name_list:
+    first_arg:IDENT args:(-"," IDENT)* { first_arg::args }
+  | ""                                 { [] }
 )
 
 let parse infile =

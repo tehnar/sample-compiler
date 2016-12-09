@@ -8,10 +8,11 @@ let num_of_lower_regs = Array.length x86lower_regs
 
 let word_size = 4
 
-type operand = RegisterIndex of int | StackIndex of int | Literal of Value.t | RegisterLowerIndex of int
+type operand = RegisterIndex of int | StackIndex of int | Literal of Value.t | RegisterLowerIndex of int | Reference of int * operand * operand * int 
 
 let x86esp = RegisterIndex 0
 let x86eax = RegisterIndex 1
+let x86ebx = RegisterIndex 3
 let x86edx = RegisterIndex 2 
 let x86ecx = RegisterIndex 4 
 let x86al  = RegisterLowerIndex 1
@@ -88,12 +89,14 @@ let get_hash s =
 
 let string_to_label s = Printf.sprintf "str_const_%d" @@ get_hash s
 
-let slot : operand -> string = function
+let rec slot : operand -> string = function
   | (RegisterIndex i) -> x86regs.(i)
   | (StackIndex i) -> Printf.sprintf "%d(%%ebp)" (-i * word_size)
   | (Literal (Value.Int i))    -> Printf.sprintf "$%d" i
   | (Literal (Value.String s)) -> Printf.sprintf "$%s" (string_to_label s)
+  | (Literal (Value.Array _ )) -> failwith "slot of array is not supported"
   | (RegisterLowerIndex i) -> x86lower_regs.(i)
+  | (Reference (offset, i, j, step)) -> Printf.sprintf "%d(%s,%s,%d)" offset (slot i) (slot j) step
 
 let suf_to_str suf = 
   match suf with
@@ -284,6 +287,24 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
          | S_CALL (label, arg_cnt) -> x86_compile_call env stack label arg_cnt
 
          | S_BUILTIN (builtin_name, arg_cnt) -> x86_compile_call env stack builtin_name arg_cnt
+
+         | S_ARRAY (boxed, n) -> 
+           let arg2 = allocate env stack in
+           let arg1 = allocate env (arg2::stack) in
+           let set_args = [X86Mov (Literal (Value.Int n), arg2); X86Mov (Literal (Value.Int (Util.bool_to_int boxed)), arg1)] in
+           let (stack', ops) = x86_compile_call env (arg1::arg2::stack) "arrmake_from_stack" (n + 2) in
+           (stack', set_args @ ops)
+
+         | S_ELEM ->
+           let (i, a, stack') = Util.unsafe_pop_two stack in
+           let s = allocate env stack' in
+           (s::stack', [X86Mov (a, x86eax); X86Mov (i, x86edx); X86Add (Literal (Value.Int 1), x86edx); 
+                       X86Mov (Reference (0, x86eax, x86edx, word_size), x86eax); X86Mov (x86eax, s)])
+
+         | S_STA -> 
+           let (e, i, a, stack') = Util.unsafe_pop_three stack in
+           (stack, [X86Mov (a, x86eax); X86Mov (i, x86edx); X86Add (Literal (Value.Int 1), x86edx); 
+                    X86Push x86ebx; X86Mov (e, x86ebx); X86Mov (x86ebx, Reference (0, x86eax, x86edx, word_size)); X86Pop x86ebx]) 
 
          | S_JMP   label           -> (stack, [X86Jmp label])
 

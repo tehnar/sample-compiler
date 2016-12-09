@@ -37,8 +37,13 @@ and eval: state -> expr -> Value.t =
     in
 
     match e with
-    | Const  n     -> n
-    | Var    x     -> Map.find x vars
+    | Const  n             -> n
+    | Var    x             -> Map.find x vars
+    | Elem  (a, i)         -> 
+        let arr = Value.to_array @@ eval c a in 
+        let i' = Value.to_int @@ eval c i in
+        arr.(i')
+    | Array (boxed, elems) -> Value.of_array boxed @@ Array.of_list @@ List.map (fun e -> eval c e) elems
     | FunctionCallExpr  (func_name, ops) -> call_func func_name ops c
     | BinaryArithmExpr  (op, l, r) -> calc (fun l r -> Ops.binary_op_to_fun op l r)  l r
     | BinaryCompareExpr (op, l, r) -> calc (fun l r -> Ops.compare_op_to_fun op l r) l r
@@ -56,6 +61,13 @@ and evalStmt: state -> statement -> (state * Value.t * bool) =
 
     | Assign (x, e) -> let y = eval c e in 
                        ((Map.add x y vars, funcs), Value.Int 0, false)
+
+    | ArrAssign (a, i, e) -> 
+        let y = eval c e in
+        let arr = Value.to_array @@ eval c a in
+        let i' = Value.to_int @@ eval c i in
+        arr.(i') <- y; 
+        (c, Value.Int 0, false)
 
     | If     (cond, if_block, else_block) -> 
         let y = eval c cond in

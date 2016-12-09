@@ -32,7 +32,17 @@ let strsub x =
   let (s, start, len) = Util.match_three_args x in
   Value.String (Bytes.sub (Value.to_bytes s) (Value.to_int start) (Value.to_int len))
 
-let is_builtin name = List.mem name ["read"; "write"; "strmake"; "strset"; "strget"; "strdup"; "strcat"; "strcmp"; "strlen"; "strsub"]
+let arrlen x = Value.Int (Array.length @@ Value.to_array @@ Util.match_one_arg x)
+
+let arrmake_unboxed x = 
+  let (n, v)  = Util.match_two_args x in
+  Value.of_array false @@ Array.make (Value.to_int n) v
+  
+let arrmake_boxed x = 
+  let (n, v)  = Util.match_two_args x in
+  Value.of_array true @@ Array.make (Value.to_int n) v
+
+let is_builtin name = List.mem name ["read"; "write"; "strmake"; "strset"; "strget"; "strdup"; "strcat"; "strcmp"; "strlen"; "strsub"; "arrlen"; "arrmake"; "Arrmake"]
 let get_builtin : string -> (Value.t list -> Value.t) = function 
   | "read"    -> read
   | "write"   -> write
@@ -44,4 +54,7 @@ let get_builtin : string -> (Value.t list -> Value.t) = function
   | "strcmp"  -> strcmp
   | "strlen"  -> strlen
   | "strsub"  -> strsub
+  | "arrlen"  -> arrlen
+  | "arrmake" -> arrmake_unboxed
+  | "Arrmake" -> arrmake_boxed
   | _         -> failwith "No builtin found"

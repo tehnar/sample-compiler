@@ -10,6 +10,10 @@ let unsafe_pop_two x = match x with
 | (y1::y2::ys) -> (y1, y2, ys)
 | _            -> failwith "unsafe_pop_two: length of list is less then 2"
 
+let unsafe_pop_three x = match x with
+| (y1::y2::y3::ys) -> (y1, y2, y3, ys)
+| _            -> failwith "unsafe_pop_three: length of list is less then 3"
+
 let rec unsafe_pop_many n stack = if n = 0 then ([], stack) else match stack with
 | [] -> failwith "unsafe_pop_many: size of stack is less then arg cnt"
 | x::xs -> let (y, ys) = unsafe_pop_many (n - 1) xs in (x::y, ys)
