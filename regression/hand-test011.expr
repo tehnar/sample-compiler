@@ -1,0 +1,25 @@
+fun foo(x) begin
+    for i := 0, i < 5, i := i + 1 do
+        x[i] := i;
+        thread_sleep(100);        
+    od;
+    return 0;
+end;
+
+fun bar(x) begin
+    for i := 5, i < 10, i := i + 1 do
+        x[i] := i;
+        thread_sleep(100);        
+    od;
+    return 0;
+end;
+    
+
+a := arrmake(10, 0);
+x := thread_create(&foo, a);
+y := thread_create(&bar, a);
+thread_join(x);
+thread_join(y);
+for i := 0, i < 10, i := i + 1 do
+    write(a[i]);
+od;

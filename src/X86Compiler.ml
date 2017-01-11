@@ -97,6 +97,7 @@ let rec slot : operand -> string = function
   | (Literal (Value.String s)) -> Printf.sprintf "$%s" (string_to_label s)
   | (Literal (Value.Array _ )) -> failwith "slot of array is not supported"
   | (Literal (Value.FuncRef _ )) -> failwith "slot of funcRef is not supported"
+  | (Literal (Value.Thread _ )) -> failwith "slot of thread is not supported"
   | (RegisterLowerIndex i) -> x86lower_regs.(i)
   | (Reference (offset, i, j, step)) -> Printf.sprintf "%d(%s,%s,%d)" offset (slot i) (slot j) step
   | (FuncReference s) -> Printf.sprintf "$%s" s
@@ -396,4 +397,4 @@ let build code name =
     Sys.getenv "RC_RUNTIME"
     with Not_found -> "../runtime"
   in  
-  ignore (Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" name runtime_dir name))
+  ignore (Sys.command (Printf.sprintf "gcc -m32  %s/runtime.o %s.s -lpthread -lm -o %s" runtime_dir name name))

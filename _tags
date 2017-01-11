@@ -1,5 +1,5 @@
 true: debug, rectypes
 
-<src/*.ml>: syntax(camlp5o), package(ostap.syntax)
-<src/*.native> or <src/*.byte>: package(re,ostap)
+<src/*.ml>: syntax(camlp5o), package(ostap.syntax), thread
+<src/*.native> or <src/*.byte>: package(re,ostap), thread
 <runtime/*>: precious

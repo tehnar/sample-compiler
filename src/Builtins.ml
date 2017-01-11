@@ -42,7 +42,22 @@ let arrmake_boxed x =
   let (n, v)  = Util.match_two_args x in
   Value.of_array true @@ Array.make (Value.to_int n) v
 
-let is_builtin name = List.mem name ["read"; "write"; "strmake"; "strset"; "strget"; "strdup"; "strcat"; "strcmp"; "strlen"; "strsub"; "arrlen"; "arrmake"; "Arrmake"]
+let thread_create x = 
+  let (func, params) = Util.unsafe_pop_one x in
+  Value.of_thread @@ Thread.create (Value.to_func func) params
+
+let thread_join x = 
+  let t = Util.match_one_arg x in 
+  Thread.join (Value.to_thread t);
+  Value.Int 0
+  
+let thread_sleep x = 
+  let delay = Util.match_one_arg x in
+  Thread.delay @@ (float_of_int @@ Value.to_int delay) /. 1000.0;
+  Value.Int 0
+
+let is_builtin name = List.mem name ["read"; "write"; "strmake"; "strset"; "strget"; "strdup"; "strcat"; "strcmp"; "strlen"; "strsub"; "arrlen"; "arrmake"; "Arrmake";
+                                     "thread_create"; "thread_join"; "thread_sleep"]
 let get_builtin : string -> (Value.t list -> Value.t) = function 
   | "read"    -> read
   | "write"   -> write
@@ -57,4 +72,7 @@ let get_builtin : string -> (Value.t list -> Value.t) = function
   | "arrlen"  -> arrlen
   | "arrmake" -> arrmake_unboxed
   | "Arrmake" -> arrmake_boxed
+  | "thread_create" -> thread_create
+  | "thread_join"   -> thread_join
+  | "thread_sleep"  -> thread_sleep
   | _         -> failwith "No builtin found"

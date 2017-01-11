@@ -1,0 +1,21 @@
+fun foo(x) begin
+    write(x);
+    thread_sleep(1000);
+    write(2 * x);
+    return 0;
+end
+
+fun bar(x) begin
+    thread_sleep(500);
+    write(3 * x);
+    thread_sleep(1000);
+    write(4 * x);
+    return 0;
+end
+
+threads := {thread_create(&foo, 10), thread_create(&bar, 20)};
+for i := 0, i < 2, i := i + 1 do
+    thread_join(threads[i]);
+od;
+write(777);
+

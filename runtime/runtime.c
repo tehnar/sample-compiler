@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include "pthread.h"
+#define read read_unused
+#define write write_unused
+#include <unistd.h>
+#undef read
+#undef write 
 
 #define SIZE(ptr) ((ptr->tag)&((1<<24) - 1))
 #define TAG(ptr) ((ptr->tag)>>24)
@@ -8,12 +14,14 @@
 #define STRING_TAG 0
 #define UNBOXED_ARRAY_TAG 1
 #define BOXED_ARRAY_TAG 2
+#define THREAD_TAG 3
 
 #define SET_SIZE(ptr, size) ptr->tag ^= SIZE(ptr) ^ size
 #define SET_TAG(ptr, t) ptr->tag ^= ((ptr->tag>>24)<<24) ^ (t<<24)
 
 #define ASSERT_IS_STRING(s) if (TAG(s) != STRING_TAG) { fprintf(stderr, "Assertion failed, line %d: string expected, but tag %d found\n", __LINE__, TAG(s)); exit(1);}
 #define ASSERT_IS_ARRAY(s) if (TAG(s) != BOXED_ARRAY_TAG && TAG(s) != UNBOXED_ARRAY_TAG) { fprintf(stderr, "Assertion failed, line %d: array expected, but tag %d found\n", __LINE__, TAG(s)); exit(1);} 
+#define ASSERT_IS_THREAD(s) if (TAG(s) != THREAD_TAG) { fprintf(stderr, "Assertion failed, line %d: thread expected, but tag %d found\n", __LINE__, TAG(s)); exit(1);}
 
 struct string {
     int tag;
@@ -154,4 +162,29 @@ extern array_t *arrmake_from_stack(int boxed, int n, ...) {
     }
     va_end(stack);
     return a;
+}
+
+struct thread {
+    int tag;
+    pthread_t thread;
+};
+
+typedef struct thread thread_t;
+
+extern thread_t* thread_create(void *(*func) (void *), void *arg) {
+    thread_t *thread = malloc(sizeof(thread_t));
+    SET_TAG(thread, THREAD_TAG);
+    pthread_create(&(thread->thread), NULL, func, arg);
+    return thread;
+}
+
+extern int thread_join(thread_t *thread) {
+    ASSERT_IS_THREAD(thread);
+    pthread_join(thread->thread, NULL);    
+    return 0;
+}
+
+extern int thread_sleep(int millis) {
+    usleep(millis);
+    return 0;
 }

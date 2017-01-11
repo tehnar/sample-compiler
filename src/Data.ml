@@ -5,8 +5,8 @@ type conditional_jump_op = Jz  | Jnz
 
 module Value = 
   struct 
-    type t = Int of int | String of bytes | Array of bool * t array | FuncRef of string * (t list -> t)    
-
+    type t = Int of int | String of bytes | Array of bool * t array | FuncRef of string * (t list -> t) | Thread of Thread.t
+    
     let of_int x    = Int    x
 
     let of_string x = String (Bytes.of_string x)
@@ -14,6 +14,8 @@ module Value =
     let of_array boxed a = Array (boxed, a)
 
     let of_func_ref name func = FuncRef (name, func)
+
+    let of_thread t = Thread t
 
     let to_int      = function
       | Int x -> x
@@ -43,12 +45,17 @@ module Value =
       | FuncRef (_, func) -> func
       | _                 -> failwith "Value.to_func: value is not a func ref"
 
+    let to_thread = function
+      | Thread t -> t
+      | _        -> failwith "Value.to_thread: value is not a thread"
+
     let rec convert_to_string = function
       | String x -> Bytes.to_string x
       | Int x    -> Printf.sprintf "%d" x
       | Array (true, elems)  -> "{" ^ (String.concat ", " @@ List.map convert_to_string @@ Array.to_list elems) ^ "}"
       | Array (false, elems) -> "[" ^ (String.concat ", " @@ List.map convert_to_string @@ Array.to_list elems) ^ "]"
       | FuncRef _ -> failwith "Value.convert_to_string: not supported for func refs"
+      | Thread _  -> failwith "Value.convert_to_string: not supported for threads"
 
   end
 
