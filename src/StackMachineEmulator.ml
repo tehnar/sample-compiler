@@ -27,7 +27,7 @@ let check_jmp_condition jmp x =
 let run code =
   let code_list = code in
   let rec run' (state, stack, stack_frames, instruction_pointer) code =
-    if instruction_pointer = Array.length code then () 
+    if instruction_pointer = Array.length code then List.hd stack 
     else let instr = code.(instruction_pointer) in
        run'
          (match instr with
@@ -37,6 +37,12 @@ let run code =
 
           | S_ST x   -> let (y, stack') = Util.unsafe_pop_one stack in
             (Map.add x y state, stack', stack_frames, instruction_pointer + 1)
+
+          | S_FUNC_REF_NAME name -> 
+              let func_start = find_label code_list name in
+              let func = fun params -> run' (Map.empty, (Value.Int (-1))::params, [], func_start) code in  
+              let stack' = (Value.of_func_ref name func)::stack in
+              (state, stack', stack_frames, instruction_pointer + 1)
 
           | S_ELEM   -> 
             let (i, a, stack') = Util.unsafe_pop_two stack in
@@ -79,16 +85,25 @@ let run code =
 
           | S_CALL (label, _) -> (Map.empty, (Value.Int (instruction_pointer+1))::stack,  state::stack_frames, find_label code_list label)
 
+          | S_REF_CALL _      -> 
+            let (func, stack') = Util.unsafe_pop_one stack in
+            let label = Value.to_func_name func in
+            (Map.empty, (Value.Int (instruction_pointer + 1))::stack', state::stack_frames, find_label code_list label)
+
           | S_BUILTIN (func_name, arg_cnt) -> 
               let (args, stack') = Util.unsafe_pop_many arg_cnt stack in 
               (state, (Builtins.get_builtin func_name args)::stack', stack_frames, instruction_pointer + 1) 
 
-          | S_RET             -> let (x, y, stack') = Util.unsafe_pop_two stack in
-                                 let (state', stack_frames') = Util.unsafe_pop_one stack_frames in (
-                                 match y with 
-                                 | Value.Int y' -> (state', x::stack', stack_frames', y')
-                                 | _            -> failwith "Expected int at the top of the stack as return address"
-                                 )
+          | S_RET             -> 
+              if stack_frames = [] then 
+                (state, stack, stack_frames, Array.length code)
+              else
+                let (x, y, stack') = Util.unsafe_pop_two stack in
+                let (state', stack_frames') = Util.unsafe_pop_one stack_frames in (
+                  match y with 
+                  | Value.Int y' -> (state', x::stack', stack_frames', y')
+                  | _            -> failwith "Expected int at the top of the stack as return address"
+                )
                                  
 
           | S_DROP            -> let (x, stack') = Util.unsafe_pop_one stack in 
@@ -106,4 +121,4 @@ let run code =
     | []           -> 0
     | (_, pos)::xs -> pos + 1
   in
-  run' (Map.empty, [], [], get_entry_point code) (Array.of_list code)
+  ignore @@ run' (Map.empty, [], [], get_entry_point code) (Array.of_list code)

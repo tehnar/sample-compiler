@@ -8,7 +8,7 @@ let num_of_lower_regs = Array.length x86lower_regs
 
 let word_size = 4
 
-type operand = RegisterIndex of int | StackIndex of int | Literal of Value.t | RegisterLowerIndex of int | Reference of int * operand * operand * int 
+type operand = RegisterIndex of int | StackIndex of int | Literal of Value.t | RegisterLowerIndex of int | Reference of int * operand * operand * int | FuncReference of string
 
 let x86esp = RegisterIndex 0
 let x86eax = RegisterIndex 1
@@ -75,6 +75,7 @@ type x86instr =
   | X86Ret
   | X86Cld    
   | X86Call      of string
+  | X86RefCall   of operand
   | X86Label     of string
   | X86Prologue  of x86environment
 
@@ -95,8 +96,10 @@ let rec slot : operand -> string = function
   | (Literal (Value.Int i))    -> Printf.sprintf "$%d" i
   | (Literal (Value.String s)) -> Printf.sprintf "$%s" (string_to_label s)
   | (Literal (Value.Array _ )) -> failwith "slot of array is not supported"
+  | (Literal (Value.FuncRef _ )) -> failwith "slot of funcRef is not supported"
   | (RegisterLowerIndex i) -> x86lower_regs.(i)
   | (Reference (offset, i, j, step)) -> Printf.sprintf "%d(%s,%s,%d)" offset (slot i) (slot j) step
+  | (FuncReference s) -> Printf.sprintf "$%s" s
 
 let suf_to_str suf = 
   match suf with
@@ -152,6 +155,7 @@ let rec x86print : x86instr -> string = function instr ->
   | X86Jmp   s          -> Printf.sprintf "\tjmp\t%s"         s
   | X86Ret              -> Printf.sprintf "\tmovl\t%%ebp,\t%%esp\n\tpopl\t%%ebp\n\tret"
   | X86Call  s          -> Printf.sprintf "\tcall\t%s"        s
+  | X86RefCall s        -> Printf.sprintf "\tcall\t*%s"      (slot s ) 
   | X86Label s          -> Printf.sprintf "%s:"               s
   | X86Cld              -> Printf.sprintf "\tcdq"
   | X86Prologue env     -> get_prologue env
@@ -226,17 +230,25 @@ let x86_compile_conditional_jmp: x86environment -> operand list -> x86instr -> (
     | (RegisterIndex x)::stack' -> (stack', [X86Test (RegisterIndex x, RegisterIndex x); op])
     | x::stack'                 -> (stack', [X86Mov (x, x86eax); X86Test(x86eax, x86eax); op])
 
+let x86_do_call = fun env stack call_op arg_cnt -> 
+  let (args, stack') = Util.unsafe_pop_many arg_cnt stack in
+  let pushes         = List.rev_map (fun op -> X86Push op) args in
+  let s              = allocate env stack' in
+  (s::stack', push_regs stack' volatile_regs @ 
+             pushes @
+             call_op  @
+             [X86Add (Literal (Value.Int (word_size * arg_cnt)), x86esp);
+              X86Mov (x86eax, s)] @
+             pop_regs stack' volatile_regs)
+
 let x86_compile_call: x86environment -> operand list -> string -> int -> (operand list) * (x86instr list) =
-  fun env stack label arg_cnt -> 
-    let (args, stack') = Util.unsafe_pop_many arg_cnt stack in
-    let pushes         = List.rev_map (fun op -> X86Push op) args in
-    let s              = allocate env stack' in
-    (s::stack', push_regs stack' volatile_regs @ 
-               pushes @
-               [X86Call label] @
-               [X86Add (Literal (Value.Int (word_size * arg_cnt)), x86esp);
-                X86Mov (x86eax, s)] @
-               pop_regs stack' volatile_regs)
+  fun env stack label arg_cnt -> x86_do_call env stack [X86Call label] arg_cnt
+
+let x86_compile_ref_call: x86environment -> operand list -> int -> (operand list) * (x86instr list) =
+  fun env stack arg_cnt -> 
+    let (addr, stack') = Util.unsafe_pop_one stack in
+    let (stack'', ops) = x86_do_call env stack' [X86RefCall x86eax] arg_cnt in
+    (stack'', [X86Mov (addr, x86eax)] @ ops)
 
 let x86compile : string -> x86environment -> instr list -> x86instr list = fun func_name env code ->
   let rec x86compile' stack code =
@@ -267,6 +279,9 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
            | _               -> (stack', [X86Mov (s, x86eax); X86Mov (x86eax, env#local_addr x)])
            )
 
+         | S_FUNC_REF_NAME x -> 
+           let s = allocate env stack in 
+           (s::stack, [X86Mov (FuncReference x, s)])
 
          | S_BINARY_ARITHM_OP Div -> 
            let (y, x, stack') = Util.unsafe_pop_two stack in 
@@ -285,6 +300,8 @@ let x86compile : string -> x86environment -> instr list -> x86instr list = fun f
          | S_CONDITIONAL_JMP (op, label) -> x86_compile_conditional_jmp env stack (conditional_jmp_to_asm op label)
 
          | S_CALL (label, arg_cnt) -> x86_compile_call env stack label arg_cnt
+
+         | S_REF_CALL (arg_cnt)    -> x86_compile_ref_call env stack arg_cnt
 
          | S_BUILTIN (builtin_name, arg_cnt) -> x86_compile_call env stack builtin_name arg_cnt
 

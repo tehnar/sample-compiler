@@ -2,24 +2,40 @@ open Data
 
 let func_name_to_label func_name = Printf.sprintf "func%s" func_name
 
-let rec call_function (func_name, ops) = 
-  let compiled_ops = List.map (fun e -> compile_expr e) ops in
+
+let rec call_function (func_name, args) = 
+  let compiled_args = compile_args args in
   let call_stmt = if Builtins.is_builtin func_name 
-  then [S_BUILTIN (func_name, List.length ops)]
-  else [S_CALL    (func_name_to_label func_name, List.length ops)]
+  then [S_BUILTIN (func_name, List.length args)]
+  else [S_CALL    (func_name_to_label func_name, List.length args)]
   in
-  List.flatten (List.rev compiled_ops) @ call_stmt 
+  compiled_args @ call_stmt 
+
+and compile_args args = 
+  let compiled_args = List.map (fun e -> compile_expr e) args in
+  List.flatten (List.rev compiled_args)
 
 and compile_expr expr =
   match expr with
   | Var    x     -> [S_LD   x]
+
   | Const  n     -> [S_PUSH n]
+  
+  | FuncRefName name -> [S_FUNC_REF_NAME (func_name_to_label name)] 
+
   | Elem (e, i)  -> compile_expr e @ compile_expr i @ [S_ELEM]
+  
   | Array (boxed, elems) -> List.concat (List.rev_map compile_expr elems) @ [S_ARRAY (boxed, List.length elems)]
+  
   | BinaryArithmExpr  (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_ARITHM_OP  op]
+  
   | BinaryCompareExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_COMPARE_OP op]
+  
   | BinaryLogicalExpr (op, l, r) -> compile_expr l @ compile_expr r @ [S_BINARY_LOGICAL_OP op]
-  | FunctionCallExpr (x, y) -> call_function (x, y)
+  
+  | FunctionCallExpr (func_name, args) -> call_function (func_name, args)
+
+  | FunctionRefCallExpr (func, args)   -> compile_args args @ compile_expr func @ [S_REF_CALL (List.length args)]
 
 and compile_statement stmt label_num cur_func =
   match stmt with
@@ -67,9 +83,11 @@ and compile_statement stmt label_num cur_func =
       let body', label_num' = compile_statement body label_num func_name in
       (lbl::beg::body' @ [S_FUNC_END], label_num')
 
-  | FunctionCallStatement (x, y) -> (call_function (x, y) @ [S_DROP], label_num)
+  | FunctionCallStatement (x, y)    -> ((compile_expr @@ FunctionCallExpr (x, y)) @ [S_DROP], label_num)
+
+  | FunctionRefCallStatement (x, y) -> ((compile_expr @@ FunctionRefCallExpr (x, y)) @ [S_DROP], label_num)
 
   | Return e -> (compile_expr e @ [S_RET], label_num)
  
 let compile_code code = 
-  let (code, _) = (compile_statement code 0 "") in code
+  let (code, _) = (compile_statement code 0 "") in code @ [S_PUSH (Value.Int 0); S_RET] 

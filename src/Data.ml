@@ -5,13 +5,15 @@ type conditional_jump_op = Jz  | Jnz
 
 module Value = 
   struct 
-    type t = Int of int | String of bytes | Array of bool * t array
-    
+    type t = Int of int | String of bytes | Array of bool * t array | FuncRef of string * (t list -> t)    
+
     let of_int x    = Int    x
 
     let of_string x = String (Bytes.of_string x)
 
     let of_array boxed a = Array (boxed, a)
+
+    let of_func_ref name func = FuncRef (name, func)
 
     let to_int      = function
       | Int x -> x
@@ -33,23 +35,34 @@ module Value =
       | Array (x, _)  -> x
       | _             -> failwith "Value.is_boxed: value is not an array"
 
+    let to_func_name = function
+      | FuncRef (name, _) -> name
+      | _                 -> failwith "Value.to_func_name: value is not a func ref"
+
+    let to_func = function
+      | FuncRef (_, func) -> func
+      | _                 -> failwith "Value.to_func: value is not a func ref"
+
     let rec convert_to_string = function
       | String x -> Bytes.to_string x
       | Int x    -> Printf.sprintf "%d" x
       | Array (true, elems)  -> "{" ^ (String.concat ", " @@ List.map convert_to_string @@ Array.to_list elems) ^ "}"
       | Array (false, elems) -> "[" ^ (String.concat ", " @@ List.map convert_to_string @@ Array.to_list elems) ^ "]"
+      | FuncRef _ -> failwith "Value.convert_to_string: not supported for func refs"
 
   end
 
 type expr =
   | Const of Value.t 
   | Var   of string
+  | FuncRefName of string
   | Elem  of expr * expr 
   | Array of bool * expr list
   | BinaryArithmExpr  of binary_arithm_op  * expr * expr
   | BinaryCompareExpr of binary_compare_op * expr * expr
   | BinaryLogicalExpr of binary_logical_op * expr * expr
   | FunctionCallExpr  of string * (expr list)
+  | FunctionRefCallExpr of expr * (expr list)
 
 type statement =
   | Skip
@@ -60,12 +73,14 @@ type statement =
   | While     of expr * statement 
   | Return    of expr
   | FunctionCallStatement of string * (expr list)
+  | FunctionRefCallStatement of expr * (expr list)
   | FunctionDef of string * (string list) * statement
 
 
 type instr =
   | S_PUSH               of Value.t
   | S_LD                 of string
+  | S_FUNC_REF_NAME      of string
   | S_ST                 of string
   | S_LABEL              of string
   | S_JMP                of string
@@ -74,6 +89,7 @@ type instr =
   | S_BINARY_COMPARE_OP  of binary_compare_op
   | S_BINARY_LOGICAL_OP  of binary_logical_op
   | S_CALL               of string * int
+  | S_REF_CALL           of int
   | S_BUILTIN            of string * int
   | S_ARRAY              of bool   * int
   | S_STA               

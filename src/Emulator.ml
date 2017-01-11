@@ -9,7 +9,7 @@ let rec eval_args: state -> (expr list) -> (Value.t list) =
   | (e::ops') -> let y = eval c e in y::(eval_args c ops')
 
 
-and call_builtin_func func_name args = Builtins.get_builtin func_name args
+and call_builtin_func func_name args = Builtins.get_builtin func_name args 
 
 and call_user_func    func_name funcs args = 
   let (arg_names, body) = Map.find func_name funcs in
@@ -18,14 +18,17 @@ and call_user_func    func_name funcs args =
   let (_, y, _) = evalStmt (vars, funcs) body in
   y
 
-and call_func: string -> (expr list) -> state -> Value.t = 
-  fun func_name ops (vars, funcs) -> 
-    let arg_values = eval_args (vars, funcs) ops in 
+and do_call_func: string -> (Value.t list) -> ((string list * statement) Map.t) -> Value.t = 
+  fun func_name arg_values funcs ->
     if Map.mem func_name funcs then
       call_user_func    func_name funcs arg_values
     else
       call_builtin_func func_name arg_values
-    
+
+and call_func: string -> (expr list) -> state -> Value.t = 
+  fun func_name ops (vars, funcs) -> 
+    let arg_values = eval_args (vars, funcs) ops in 
+    do_call_func func_name arg_values funcs 
     
 and eval: state -> expr -> Value.t =
   fun ((vars, funcs) as c) e -> 
@@ -38,15 +41,28 @@ and eval: state -> expr -> Value.t =
 
     match e with
     | Const  n             -> n
+    
     | Var    x             -> Map.find x vars
+
     | Elem  (a, i)         -> 
         let arr = Value.to_array @@ eval c a in 
         let i' = Value.to_int @@ eval c i in
         arr.(i')
+    
     | Array (boxed, elems) -> Value.of_array boxed @@ Array.of_list @@ List.map (fun e -> eval c e) elems
+    
+    | FuncRefName (name)   -> Value.of_func_ref name (fun args -> do_call_func name args funcs)
+
     | FunctionCallExpr  (func_name, ops) -> call_func func_name ops c
+    
+    | FunctionRefCallExpr (func, ops) -> 
+        let func' = Value.to_func (eval c func) in
+        func' @@ eval_args c ops 
+
     | BinaryArithmExpr  (op, l, r) -> calc (fun l r -> Ops.binary_op_to_fun op l r)  l r
+    
     | BinaryCompareExpr (op, l, r) -> calc (fun l r -> Ops.compare_op_to_fun op l r) l r
+    
     | BinaryLogicalExpr (op, l, r) -> calc (fun l r -> Ops.logical_op_to_fun op l r) l r
 
 and evalStmt: state -> statement -> (state * Value.t * bool) =
@@ -82,7 +98,9 @@ and evalStmt: state -> statement -> (state * Value.t * bool) =
         if isReturn then (c', y', isReturn) else run_while c' cond block
       in run_while c cond block
 
-    | FunctionCallStatement (func_name, ops) -> let _ = call_func func_name ops c in (c, Value.Int 0, false)
+    | FunctionCallStatement (func_name, ops) -> let _ = eval c @@ FunctionCallExpr (func_name, ops) in (c, Value.Int 0, false)
+
+    | FunctionRefCallStatement (func, ops)   -> let _ = eval c @@ FunctionRefCallExpr (func, ops)   in (c, Value.Int 0, false)
 
     | Return e -> let y = eval c e in (c, y, true)
 

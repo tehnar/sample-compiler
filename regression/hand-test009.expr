@@ -1,0 +1,35 @@
+fun foo(x) begin
+    write(x);
+    return 0;
+end
+
+fun bar(x) begin
+    write(2 * x);
+    return 0;
+end
+
+fun one(x) begin
+    return 1;
+end;
+
+fun two(x) begin
+    return 2;
+end;
+
+foobar := &foo;
+(*foobar)(1);
+foobar := &bar;
+(*foobar)(1);
+x := read();
+if x % 2 == 0 then 
+    foobar := &foo;
+else 
+    foobar := &bar; 
+fi;
+
+(*foobar)(read());
+
+funcs := {&foo, &bar, &one, &two};
+for i := 0, i < 4, i := i + 1 do
+    write( (*funcs[i])(7) );
+od; 

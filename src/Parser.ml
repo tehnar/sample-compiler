@@ -51,7 +51,9 @@ ostap (
   | "true"                       { Const (Value.Int 1) }
   | "false"                      { Const (Value.Int 0) }
   | x:function_call              { x }
+  | x:function_ref_call          { x }
   | x:IDENT                      { Var x }
+  | "&" x:IDENT                  { FuncRefName x}
   | -"(" expr -")";
 
   stmt:
@@ -82,6 +84,7 @@ ostap (
   | x:IDENT ":=" e:expr                   { Assign (x , e)  }
   | s:function_def        { s }
   | s:function_call { match s with FunctionCallExpr (name, args) -> FunctionCallStatement (name, args) | _ -> assert false }
+  | s:function_ref_call { match s with FunctionRefCallExpr (f, args) -> FunctionRefCallStatement (f, args) | _ -> assert false }
   | "" {Skip};
 
   array_expr: 
@@ -93,6 +96,9 @@ ostap (
 
   function_call:
     fun_name:IDENT "(" args:args_expr_list ")" {FunctionCallExpr (fun_name, args)};
+
+  function_ref_call:
+    "(" "*" f:expr ")" args:args_expr_list { FunctionRefCallExpr (f, args) };
 
   args_expr_list:
     first_arg:expr args:(-"," expr)* { first_arg::args }
@@ -114,8 +120,7 @@ let parse infile =
        inherit Util.Lexers.char s
        inherit Util.Lexers.skip [
 	 Matcher.Skip.whitespaces " \t\n";
-	 Matcher.Skip.lineComment "--";
-	 Matcher.Skip. nestedComment "(*" "*)"
+	 Matcher.Skip.lineComment "--"
        ] s
      end
     )
