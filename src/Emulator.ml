@@ -10,7 +10,9 @@ let rec eval_args: state -> (expr list) -> (Value.t list) =
 
 
 and call_builtin_func func_name funcs args = 
-  if func_name = "thread_create" then Value.of_thread @@ Thread.create (fun () -> do_call_func func_name args funcs) () 
+  if func_name = "thread_create" then 
+    let (func_name', param) = Util.match_two_args args in
+    Value.of_thread @@ Thread.create (fun () -> do_call_func (Value.to_func_name func_name') [param] funcs) () 
   else Builtins.get_builtin func_name args 
 
 and call_user_func    func_name funcs args = 
