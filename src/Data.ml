@@ -1,3 +1,5 @@
+module Map = Map.Make (String)
+
 type binary_arithm_op    = Add | Sub | Mul | Div | Mod 
 type binary_compare_op   = Le  | Leq | Ge  | Geq | Eq  | Neq
 type binary_logical_op   = And | Or
@@ -5,7 +7,7 @@ type conditional_jump_op = Jz  | Jnz
 
 module Value = 
   struct 
-    type t = Int of int | String of bytes | Array of bool * t array | FuncRef of string * (t list -> t) | Thread of Thread.t
+    type t = Int of int | String of bytes | Array of bool * t array | FuncRef of string | Thread of Thread.t
     
     let of_int x    = Int    x
 
@@ -13,7 +15,7 @@ module Value =
 
     let of_array boxed a = Array (boxed, a)
 
-    let of_func_ref name func = FuncRef (name, func)
+    let of_func_ref name = FuncRef name
 
     let of_thread t = Thread t
 
@@ -38,12 +40,8 @@ module Value =
       | _             -> failwith "Value.is_boxed: value is not an array"
 
     let to_func_name = function
-      | FuncRef (name, _) -> name
-      | _                 -> failwith "Value.to_func_name: value is not a func ref"
-
-    let to_func = function
-      | FuncRef (_, func) -> func
-      | _                 -> failwith "Value.to_func: value is not a func ref"
+      | FuncRef name -> name
+      | _            -> failwith "Value.to_func_name: value is not a func ref"
 
     let to_thread = function
       | Thread t -> t
@@ -70,18 +68,21 @@ type expr =
   | BinaryLogicalExpr of binary_logical_op * expr * expr
   | FunctionCallExpr  of string * (expr list)
   | FunctionRefCallExpr of expr * (expr list)
-
-type statement =
+  | ScopeExpr         of Value.t Map.t * statement
+and 
+statement =
   | Skip
   | Assign    of string * expr
   | ArrAssign of expr * expr * expr
   | Seq       of statement * statement
   | If        of expr * statement * statement
   | While     of expr * statement 
+  | WhileRed  of expr * expr * statement 
   | Return    of expr
   | FunctionCallStatement of string * (expr list)
   | FunctionRefCallStatement of expr * (expr list)
   | FunctionDef of string * (string list) * statement
+  | Scope     of Value.t Map.t * statement
 
 
 type instr =

@@ -42,10 +42,6 @@ let arrmake_boxed x =
   let (n, v)  = Util.match_two_args x in
   Value.of_array true @@ Array.make (Value.to_int n) v
 
-let thread_create x = 
-  let (func, params) = Util.unsafe_pop_one x in
-  Value.of_thread @@ Thread.create (Value.to_func func) params
-
 let thread_join x = 
   let t = Util.match_one_arg x in 
   Thread.join (Value.to_thread t);
@@ -72,7 +68,7 @@ let get_builtin : string -> (Value.t list -> Value.t) = function
   | "arrlen"  -> arrlen
   | "arrmake" -> arrmake_unboxed
   | "Arrmake" -> arrmake_boxed
-  | "thread_create" -> thread_create
+  | "thread_create" -> failwith "thread_create is a special builtin that should be treated by interpreter"
   | "thread_join"   -> thread_join
   | "thread_sleep"  -> thread_sleep
   | _         -> failwith "No builtin found"

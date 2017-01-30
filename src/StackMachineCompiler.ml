@@ -89,5 +89,8 @@ and compile_statement stmt label_num cur_func =
 
   | Return e -> (compile_expr e @ [S_RET], label_num)
  
+  | Scope _ -> failwith "Scope is used only in reducer!"
+
+  | WhileRed _ -> failwith "WhileRed is used onlyin reducer!"
 let compile_code code = 
   let (code, _) = (compile_statement code 0 "") in code @ [S_PUSH (Value.Int 0); S_RET] 

@@ -29,8 +29,6 @@ let allocate env stack =
   | (RegisterIndex n)::_ when n < num_of_regs-1 -> RegisterIndex (n+1)
   | _                                           -> let i = env#local_vars_count + 1 in
                                                    env#allocate i; StackIndex i
-module Map = Map.Make (String)
-
 class x86environment =
   object(self)
     val    args_count       = ref 0

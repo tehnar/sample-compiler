@@ -38,8 +38,7 @@ let make_step threads thread_num code code_list =
           ((Map.add x y state, stack', stack_frames, instruction_pointer + 1, thread_id), [])
 
         | S_FUNC_REF_NAME name -> 
-            let func = fun params -> Value.Int 0 (*run' (Map.empty, (Value.Int (-1))::params, [], func_start) code*) in  
-            let stack' = (Value.of_func_ref name func)::stack in
+            let stack' = (Value.of_func_ref name)::stack in
             ((state, stack', stack_frames, instruction_pointer + 1, thread_id), [])
 
         | S_ELEM   -> 
